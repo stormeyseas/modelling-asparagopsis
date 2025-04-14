@@ -1,0 +1,30 @@
+project:
+  type: manuscript
+
+manuscript:
+  article: manuscript.qmd
+  # manuscript-url: # The deployed url for this manuscript
+
+acronyms:
+  insert_loa: false
+  keys:
+    - shortname: BARRA
+      longname: Atmospheric high-resolution Regional Reanalysis for Australia
+    - shortname: BRAN
+      longname: Bluelink Ocean Reanalysis
+    - shortname: NOD
+      longname: National Outfall Database
+    - shortname: ASSA
+      longname: Australian Sustainable Seaweed Alliance
+    - shortname: IMOS
+      longname: Integrated Marine Observing System
+    - shortname: NCRIS
+      longname: National Collaborative Research Infrastructure Strategy
+    - shortname: NESP
+      longname: National Environmental Science Program
+      
+execute: 
+  cache: true
+  freeze: true
+  
+notebook-links: false
