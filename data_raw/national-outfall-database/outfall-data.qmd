@@ -1,0 +1,542 @@
+---
+title: "Processing National Outfall Database Data"
+author: "Tormey Reimer"
+date-modified: today
+
+format: 
+  html:
+    theme: simplex
+    css: ["../resources/extra.css"]
+    code-fold: true
+    code-overflow: wrap
+    toc: true
+    toc-expand: true
+    toc-location: left
+    lang: en-GB
+    grid:
+      sidebar-width: 350px
+      body-width: 1200px
+      margin-width: 150px
+      gutter-width: 2em
+
+execute:
+  echo: true
+  warning: false
+  fig-align: center
+  freeze: auto
+---
+
+```{r setup}
+#| include: FALSE
+
+base_path <- file.path("C:", "Users", "treimer", "Documents", "R-temp-files", "FRDC-seaweed", "data-raw", "national-outfall-database")
+
+packs <- c("tidyverse", "units", "formatdown", "ozmaps", "arrow", "readxl", "targets", "tibble", "glue")
+pacman::p_load(char = packs)
+# This markdown uses TinyTex - install with tinytex::install_tinytex()
+
+# devtools::install_github("https://github.com/stormeyseas/NR-model-package.git", force = T)
+# library(macrogrow)
+```
+
+# Introduction
+
+```{r globals}
+#| code-summary: Global defaults
+
+bounds <- tar_read(bbox, store = file.path("C:", "Users", "treimer", "Documents", "R-temp-files", "FRDC-seaweed", "_targets-outputs", "_big_data"))
+
+oz_capitals <- tribble( 
+  ~city,           ~lat,     ~lon,
+  "Sydney",    -33.8688, 151.2093,  
+  "Melbourne", -37.8136, 144.9631, 
+  "Brisbane",  -27.4698, 153.0251, 
+  "Adelaide",  -34.9285, 138.6007, 
+  "Perth",     -31.9505, 115.8605, 
+  "Hobart",    -42.8821, 147.3272, 
+  "Canberra",  -35.2809, 149.1300, 
+  "Darwin",    -12.4634, 130.8456, 
+)
+
+prettyplot <- theme_classic() +
+  theme(element_text(family = "sans", size = 14, colour = "black"),
+        axis.title.y = element_text(vjust = 2))
+
+aus_map <- ggplot() +
+  geom_sf(data = ozmap_data(data = "states")) +
+  geom_point(data = oz_capitals, aes(x = lon, y = lat)) +
+  coord_sf(xlim = c(bounds[["AUS"]]["lonmin"], bounds[["AUS"]]["lonmax"]),
+           ylim = c(bounds[["AUS"]]["latmin"], bounds[["AUS"]]["latmax"])) +
+  scale_x_continuous(breaks = seq(100, 160, 5)) +
+  scale_y_continuous(breaks = seq(-5, -45, -5)) +
+  labs(x = "Longitude", y = "Latitude") +
+  prettyplot
+
+# Megalitres
+install_unit(symbol = "ML", def = "1000000 L")
+```
+
+```{r load in outfall data}
+#| code-summary: Load and clean up data
+
+df <- read_excel(file.path(base_path, "outfalls.xlsx")) %>% 
+  pivot_longer(names_to = "Month", values_to = "value", cols = c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")) %>% 
+  mutate_all(str_trim) %>% 
+  mutate(Indicator = as.factor(Indicator),
+         Year = as.integer(Year),
+         Month = as.integer(factor(Month, levels = month.name)),
+         date = make_date(year = Year, month = Month, day = 1),
+         value = case_when(value == "null" ~ NA,
+                           TRUE ~ value),
+         value = as.numeric(value)) %>% 
+  rename(year = Year, month = Month, indicator = Indicator, location = Location) %>% 
+  filter(!location %in% c("Home Island", "Christmas Island")) 
+
+data_locations <- sort(unique(df$location))
+
+# cod = chemical oxygen demand
+# ec = electrical conductivity
+# sar = sodium adsorption ratio
+levels(df$indicator) <- c("ammonia", "bod_5days", "calcium", "cod", "chlorine", "chlorophyll_a", "colour", "do", "e_coli", "ec", "enterococci", "faecal_coliforms", "magnesium", "nitrate", "nitrite", "oil_grease", "outflow_vol", "pH", "sodium", "sar", "surfactants_MBAS", "temperature", "total_algae_count", "total_bluegreen_algae_count", "total_coliforms", "total_diss_solids", "total_N", "total_P", "total_susp_solids", "turbidity")
+```
+
+# Station locations
+
+The locations don't come with the raw data so I'll have to find another way to pair the data with its geographic location.
+
+```{r locations}
+#| code-summary: Merge location names and site IDs
+
+locsites <- read.csv(file.path(base_path, "locations.txt")) %>% 
+  filter(!is.na(latitude))
+locnames <- read.csv(file.path(base_path, "locations_inspect.txt")) %>% 
+  mutate_all(str_trim) %>% 
+  mutate(site_id = as.numeric(site_id))
+locnames$name[locnames$name == "Boags Rock (Mt Martha Somers Boneo)"] <- "Boags Rock (Mt Martha, Somers, Boneo)"
+locnotes <- read_excel(file.path(base_path, "SITE NAMES.xlsx")) %>% 
+  mutate_all(str_trim) %>% 
+  rename(inland = note)
+
+locs <- merge(locnames, locsites, by = "site_id", all.x = T, all.y = T) 
+locs <- merge(locs, locnotes, by = "site_id", all = T)
+
+# Just checking where I messed up the names of sites close together
+# doesn't matter much as lon as state, group and inland columns are the same
+# locs[locs$name.x != locs$name.y,]
+
+name_locations <- sort(unique(locs$name.x))
+locs <- locs %>% 
+  rename(name = name.x) %>% 
+  filter(!is.na(name)) %>% 
+  select(-name.y)
+rm(locnames, locsites, locnotes)
+```
+
+```{r pairing}
+#| code-summary: Get location, names and data all ready to pair up
+
+# names in the locational file not in the data (filter out)
+diff_1 <- setdiff(name_locations, data_locations)
+# locs %>% 
+#   filter(name %in% diff_1) %>% 
+#   select(site_id)
+locs <- locs %>% 
+  filter(!name %in% diff_1)
+
+# names in the data not in the locational file (none)
+diff_2 <- setdiff(data_locations, name_locations)
+```
+
+This condenses stations that are very close together, takes a mean of their concentration and sums their outflow volume.
+
+```{r subset and save data}
+#| code-summary: Subset data into nitrogen, temperature etc and save for later
+
+ref <- merge(locs, df, by.x = "name", by.y = "location", all = T) %>% 
+  filter(is.na(inland)) %>% 
+  mutate(group = case_when(!is.na(group) ~ group, TRUE ~ name)) %>% 
+  mutate(name = as.factor(group),
+         state = as.factor(state)) %>% 
+  select(-group, -inland) %>% 
+  pivot_wider(names_from = indicator, values_from = value) %>%
+  mutate(nitrate_nitrite = case_when(is.na(nitrate) ~ nitrite,
+                                     is.na(nitrite) ~ nitrate,
+                                     TRUE ~ nitrate + nitrite)) %>% 
+  dplyr::select(-nitrate, -nitrite) 
+
+inds <- colnames(ref)[!colnames(ref) %in% c("outflow_vol", "name", "site_id", "latitude", "longitude", "state", "year", "month", "date")]
+
+ref <- ref %>% 
+  pivot_longer(names_to = "indicator", values_to = "value", cols = all_of(inds)) %>% 
+  mutate(outflow_vol = set_units(outflow_vol, "ML")) %>% 
+  write_parquet(file.path(base_path, "data-output", "outflow_all_data.parquet"))
+
+# # Might need this later
+# ref %>% 
+#   filter(indicator == "temperature") %>% 
+#   mutate(value = set_units(value, "degree_Celsius")) %>% 
+#   group_by(state, name, indicator, year, month, date) %>% 
+#   reframe(latitude = mean(latitude),
+#           longitude = mean(longitude),
+#           outflow_vol = sum(outflow_vol, na.rm = T),
+#           value = mean(value, na.rm = T)) %>% 
+#   write_parquet(file.path(base_path, "data-output", "temperature_data.parquet"))
+
+ref <- ref %>% 
+  filter(indicator %in% c("ammonia", "nitrate_nitrite", "total_N")) %>% 
+  group_by(state, name, indicator, year, month, date) %>% 
+  reframe(latitude = mean(latitude),
+          longitude = mean(longitude),
+          outflow_vol = sum(outflow_vol, na.rm = T),
+          value = mean(value, na.rm = T)) %>% 
+  write_parquet(file.path(base_path, "data-output", "nitrogen_data_raw.parquet"))
+
+reflocs <- ref %>% 
+  group_by(state, name) %>% 
+  reframe(latitude = mean(latitude), 
+          longitude = mean(longitude)) %>% 
+  write_parquet(file.path(base_path, "data-output", "outflow_site_locations.parquet"))
+```
+
+## Map
+
+```{r outfall map}
+#| fig-width: 10
+#| fig-height: 7.5
+#| fig-align: "center"
+#| code-summary: "Map of all the outflow stations"
+
+ggplot(reflocs, aes(x = longitude, y = latitude, label = name)) +
+  geom_sf(data = ozmap_data(), inherit.aes = F) +
+  coord_sf(xlim = c(110, 160)) +
+  geom_point() +
+  # geom_text(nudge_y = 0.75) +
+  theme_classic()
+```
+
+## Look at the data
+
+After having a quick look at the data, I can see that many sites did not collect data in 2018 and the dataset for most sites ends in mid-2023. 
+I decided to use data based on the quality of what was available. Here's how it looks:
+
+* Quality 1: At least 20 months from 2019-2023 is available
+* Quality 2: At least 20 months from 2014-2028 is available
+* Quality 3: At least 20 months is available in total (from 2014-2023)
+* Quality 4: Less than 20 months is available in total (from 2014-2023)
+* Quality 5: No data available.
+
+Quality levels 4 and 5 are essentially identical and data for these sites/indicators were not used. Quality 1-3 are used to calculate annual mean values.
+
+```{r sparse method 1}
+#| code-summary: Group by tiered quality
+
+ref <- ref %>% 
+  rename(outflow_vol_ML = outflow_vol) %>% 
+  mutate(outflow_vol_ML = drop_units(outflow_vol_ML)) %>% 
+  pivot_wider(names_from = "indicator", values_from = "value") %>% 
+  mutate(ammonia = case_when(!is.na(ammonia) ~ ammonia,
+                             is.na(ammonia) & !is.na(nitrate_nitrite) & !is.na(total_N) ~ total_N - nitrate_nitrite,
+                             TRUE ~ ammonia),
+         nitrate_nitrite = case_when(!is.na(nitrate_nitrite) ~ nitrate_nitrite,
+                                     is.na(nitrate_nitrite) & !is.na(ammonia) & !is.na(total_N) ~ total_N - ammonia,
+                                     TRUE ~ total_N)) %>% 
+  pivot_longer(names_to = "indicator", values_to = "value", cols = c(ammonia, nitrate_nitrite, total_N)) %>% 
+  mutate(indicator = as.factor(indicator),
+         value = case_when(value < 0 ~ NA,
+                           TRUE ~ value)) %>% 
+  filter(!is.na(value)) %>% 
+  filter(indicator != "total_N")
+
+counting_data_pts <- ref %>% 
+  group_by(state, name, indicator, year) %>% 
+  reframe(months = n()) %>% 
+  mutate(indicator = droplevels(indicator))
+
+names <- levels(counting_data_pts$name)
+indics <- levels(counting_data_pts$indicator)
+
+res <- res_data <- list()
+# Just ammonia and nitrate_nitrite
+for (ind in 1:2) {
+  inds <- inds_data <- list()
+  for (nm in 1:length(names)) {
+    
+    tmp <- counting_data_pts %>% 
+      filter(name == names[nm] & indicator == indics[ind])
+    
+    if (nrow(tmp) == 0) {
+      inds[[nm]] <- data.frame(
+        state = as.character(counting_data_pts$state[counting_data_pts$name == names[nm]][1]),
+        name = names[nm], 
+        indicator = indics[ind],
+        quality = 5,
+        result = "No data available"
+      )
+      inds_data[[nm]] <- data.frame(state = as.character(ref$state[ref$name == names[nm]][1]), 
+                                    name = names[nm], 
+                                    indicator = indics[ind], 
+                                    month = NA, outflow_vol_ML = NA, outfall_conc_mgL = NA, 
+                                    quality = 5)
+      
+    } else if (sum(tmp$months[tmp$year >= 2019]) >= 20) {
+      inds[[nm]] <- tmp %>% 
+        group_by(state, name, indicator) %>% 
+        reframe(quality = 1,
+                result = glue("Data available for {sum(tmp$months[tmp$year >= 2019])} months in period 2019-2023"))
+        
+      inds_data[[nm]] <- ref %>% 
+        filter(name == names[nm] & indicator == indics[ind]) %>% 
+        filter(year >= 2019) %>% 
+        group_by(state, name, indicator, month) %>% 
+        reframe(outflow_vol_ML = mean(outflow_vol_ML, na.rm = T),
+                outfall_conc_mgL = mean(value, na.rm = T),
+                quality = 1)
+      
+    } else if (sum(tmp$months[tmp$year <= 2018]) >= 20) {
+      inds[[nm]] <- tmp %>% 
+        group_by(state, name, indicator) %>% 
+        reframe(quality = 2,
+                result = glue("Data available for {sum(tmp$months[tmp$year <= 2018])} months in period 2014-2018"))
+      
+      inds_data[[nm]] <- ref %>% 
+        filter(name == names[nm] & indicator == indics[ind]) %>% 
+        filter(year <= 2018) %>% 
+        group_by(state, name, indicator, month) %>% 
+        reframe(outflow_vol_ML = mean(outflow_vol_ML, na.rm = T),
+                outfall_conc_mgL = mean(value, na.rm = T),
+                quality = 2) 
+      
+    } else if (sum(tmp$months) >= 20) {
+      inds[[nm]] <- tmp %>% 
+        group_by(state, name, indicator) %>% 
+        reframe(quality = 3,
+                result = glue("Data available for {sum(tmp$months[tmp$year <= 2018])} months in period 2014-2023"))
+      
+      inds_data[[nm]] <- ref %>% 
+        filter(name == names[nm] & indicator == indics[ind]) %>% 
+        group_by(state, name, indicator, month) %>% 
+        reframe(outflow_vol_ML = mean(outflow_vol_ML, na.rm = T),
+                outfall_conc_mgL = mean(value, na.rm = T),
+                quality = 3)
+      
+    } else {
+      inds[[nm]] <- data.frame(
+        state = tmp$state[1],
+        name = names[nm], 
+        indicator = indics[ind],
+        quality = 4,
+        result = glue("Not enough data available - only {sum(tmp$months)} months in period 2014-2023")
+        )
+      
+      inds_data[[nm]] <- data.frame(state = as.character(ref$state[ref$name == names[nm]][1]), 
+                                    name = names[nm], 
+                                    indicator = indics[ind], 
+                                    month = NA, outflow_vol_ML = NA, outfall_conc_mgL = NA, 
+                                    quality = 4)
+      
+    }
+  }
+  res[[ind]] <- bind_rows(inds)
+  res_data[[ind]] <- bind_rows(inds_data)
+}
+res <- bind_rows(res) %>% 
+  mutate(indicator = as.factor(indicator),
+         state = as.factor(state)) %>% 
+  write_parquet(file.path(base_path, "data-output", "tiered_quality_results.parquet"))
+
+res_data <- bind_rows(res_data) %>% 
+  mutate(indicator = as.factor(indicator),
+         state = as.factor(state))
+
+res_data_ave <- res_data %>% 
+  filter(outflow_vol_ML != 0) %>% 
+  group_by(name, month) %>% 
+  reframe(ave_outflow_vol_ML = mean(outflow_vol_ML, na.rm = T))
+
+res_data <- res_data %>% 
+  merge(res_data_ave, by = c("name", "month")) %>% 
+  mutate(outflow_vol_ML = case_when(outflow_vol_ML != 0 ~ outflow_vol_ML,
+                                    TRUE ~ ave_outflow_vol_ML)) %>% 
+  dplyr::select(-ave_outflow_vol_ML)
+  
+res_sparse <- res_data %>% 
+  filter(!is.na(outfall_conc_mgL)) %>% 
+  write_parquet(file.path(base_path, "data-output", "outflow_results.parquet"))
+
+sstates <- levels(res$state)
+sinds <- levels(res$indicator)
+```
+
+The table below summarises the results of the tiered-quality system.
+
+| State | Measure | Q1 | Q2 | Q3 | Q4 | Q5 |
+|:--------:|:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
+| `r sstates[1]` | `r sinds[1]` |   `r length(unique(res$name[res$quality == 1 & res$state == sstates[1] & res$indicator == sinds[1]]))` |   `r length(unique(res$name[res$quality == 2 & res$state == sstates[1] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[1] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[1] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[1] & res$indicator == sinds[1]]))` |
+|  | `r sinds[2]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[1] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[1] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[1] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[1] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[1] & res$indicator == sinds[5]]))` |
+|  | `r sinds[3]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[1] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[1] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[1] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[1] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[1] & res$indicator == sinds[5]]))` |
+|  | `r sinds[4]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[1] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[1] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[1] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[1] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[1] & res$indicator == sinds[5]]))` |
+| `r sstates[2]` | `r sinds[1]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[2] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[2] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[2] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[2] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[2] & res$indicator == sinds[1]]))` |
+|  | `r sinds[2]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[2] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[2] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[2] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[2] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[2] & res$indicator == sinds[5]]))` |
+|  | `r sinds[3]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[2] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[2] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[2] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[2] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[2] & res$indicator == sinds[5]]))` |
+|  | `r sinds[4]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[2] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[2] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[2] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[2] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[2] & res$indicator == sinds[5]]))` |
+| `r sstates[3]` | `r sinds[1]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[3] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[3] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[3] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[3] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[3] & res$indicator == sinds[1]]))` |
+|  | `r sinds[2]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[3] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[3] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[3] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[3] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[3] & res$indicator == sinds[5]]))` |
+|  | `r sinds[3]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[3] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[3] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[3] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[3] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[3] & res$indicator == sinds[5]]))` |
+|  | `r sinds[4]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[3] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[3] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[3] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[3] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[3] & res$indicator == sinds[5]]))` |
+| `r sstates[4]` | `r sinds[1]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[4] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[4] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[4] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[4] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[4] & res$indicator == sinds[1]]))` |
+|  | `r sinds[2]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[4] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[4] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[4] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[4] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[4] & res$indicator == sinds[5]]))` |
+|  | `r sinds[3]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[4] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[4] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[4] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[4] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[4] & res$indicator == sinds[5]]))` |
+|  | `r sinds[4]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[4] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[4] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[4] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[4] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[4] & res$indicator == sinds[5]]))` |
+| `r sstates[5]` | `r sinds[1]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[5] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[5] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[5] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[5] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[5] & res$indicator == sinds[1]]))` |
+|  | `r sinds[2]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[5] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[5] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[5] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[5] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[5] & res$indicator == sinds[5]]))` |
+|  | `r sinds[3]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[5] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[5] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[5] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[5] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[5] & res$indicator == sinds[5]]))` |
+|  | `r sinds[4]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[5] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[5] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[5] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[5] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[5] & res$indicator == sinds[5]]))` |
+| `r sstates[6]` | `r sinds[1]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[6] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[6] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[6] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[6] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[6] & res$indicator == sinds[1]]))` |
+|  | `r sinds[2]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[6] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[6] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[6] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[6] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[6] & res$indicator == sinds[5]]))` |
+|  | `r sinds[3]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[6] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[6] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[6] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[6] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[6] & res$indicator == sinds[5]]))` |
+|  | `r sinds[4]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[6] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[6] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[6] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[6] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[6] & res$indicator == sinds[5]]))` |
+| `r sstates[7]` | `r sinds[1]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[7] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[7] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[7] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[7] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[7] & res$indicator == sinds[1]]))` |
+|  | `r sinds[2]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[7] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[7] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[7] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[7] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[7] & res$indicator == sinds[5]]))` |
+|  | `r sinds[3]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[7] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[7] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[7] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[7] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[7] & res$indicator == sinds[5]]))` |
+|  | `r sinds[4]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[7] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[7] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[7] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[7] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[7] & res$indicator == sinds[5]]))` |
+| `r sstates[8]` | `r sinds[1]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[8] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[8] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[8] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[8] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[8] & res$indicator == sinds[1]]))` |
+|  | `r sinds[2]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[8] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[8] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[8] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[8] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[8] & res$indicator == sinds[5]]))` |
+|  | `r sinds[3]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[8] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[8] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[8] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[8] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[8] & res$indicator == sinds[5]]))` |
+|  | `r sinds[4]` | `r length(unique(res$name[res$quality == 1 & res$state == sstates[8] & res$indicator == sinds[1]]))` | `r length(unique(res$name[res$quality == 2 & res$state == sstates[8] & res$indicator == sinds[2]]))` | `r length(unique(res$name[res$quality == 3 & res$state == sstates[8] & res$indicator == sinds[3]]))` | `r length(unique(res$name[res$quality == 4 & res$state == sstates[8] & res$indicator == sinds[4]]))` | `r length(unique(res$name[res$quality == 5 & res$state == sstates[8] & res$indicator == sinds[5]]))` |
+|  |  | 
+
+From the above table, we can see that there was no usable nitrogen data for NT, WA-North or WA-South. There were 4 "good" (quality = 1) sites for NSW, 3 for QLD, 26 for TAS and 4 for VIC. 
+
+I would like to take a look at the lower quality sites and indicators, because if total N and one of nitrate/nitrite or ammonium is available, I might be able to calculate the missing variable.
+
+```{r calculate}
+res_wide <- res_sparse %>% 
+  dplyr::select(-quality) %>% 
+  pivot_wider(names_from = indicator, values_from = outfall_mg) %>% 
+  mutate(
+    ammonia = case_when(!is.na(ammonia) ~ ammonia,
+                        !is.na(nitrate_nitrite) & !is.na(total_N) ~ total_N - nitrate_nitrite),
+    ammonia_calculated = case_when(!is.na(ammonia) ~ 0,
+                                   !is.na(nitrate_nitrite) & !is.na(total_N) ~ 1,
+                                   TRUE ~ NA),
+    nitrate_nitrite = case_when(!is.na(nitrate_nitrite) ~ nitrate_nitrite,
+                                !is.na(ammonia) & !is.na(total_N) ~ total_N - ammonia),
+    nitrate_nitrite_calculated = case_when(!is.na(nitrate_nitrite) ~ 0,
+                                           !is.na(ammonia) & !is.na(total_N) ~ 1,
+                                           TRUE ~ NA)
+    )
+sum(res_wide$ammonia_calculated, na.rm = T)
+sum(res_wide$nitrate_nitrite_calculated, na.rm = T)
+```
+
+Nope, not possible for any sites.
+
+```{r save final}
+res_sparse %>% 
+  write_parquet(file.path(base_path, "data", "nitrogen_tiered_quality_data.parquet"))
+```
+
+
+```{r tas data map}
+#| fig-align: "center"
+#| code-summary: "Map of data available from outflow stations in Tasmania"
+
+res_sparse %>% 
+  filter(state == "TAS" & indicator != "total_N") %>% 
+  filter(!quality %in% c(4, 5)) %>% # doesn't actually remove any data
+  ggplot(aes(x = month, y = outfall_mg, colour = name)) +
+  geom_line() +
+  facet_grid(rows = vars(indicator), cols = vars(quality), scales = "free") +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+```{r vic data map}
+#| fig-align: "center"
+#| code-summary: "Map of data available from outflow stations in Victoria"
+
+res_sparse %>% 
+  filter(state == "VIC" & indicator != "total_N") %>% 
+  filter(!quality %in% c(4, 5)) %>% # doesn't actually remove any data
+  ggplot(aes(x = month, y = outfall_conc_mgL, colour = name)) +
+  geom_line() +
+  facet_grid(rows = vars(indicator), cols = vars(quality), scales = "free") +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+```{r wa data map, eval=FALSE}
+#| fig-align: "center"
+#| code-summary: "Map of data available from outflow stations in WA"
+
+res_sparse %>% 
+  filter(state %in% c("WAS", "WAN") & indicator != "total_N") %>% 
+  filter(!quality %in% c(4, 5)) %>% # doesn't actually remove any data
+  ggplot(aes(x = month, y = outfall_conc_mgL, colour = name)) +
+  geom_line() +
+  facet_grid(rows = vars(indicator), cols = vars(quality), scales = "free") +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+```{r sa data map, eval=FALSE}
+#| fig-align: "center"
+#| code-summary: "Map of data available from outflow stations in SA"
+
+res_sparse %>% 
+  filter(state == "SAU" & indicator != "total_N") %>% 
+  filter(!quality %in% c(4, 5)) %>% # doesn't actually remove any data
+  ggplot(aes(x = month, y = outfall_conc_mgL, colour = name)) +
+  geom_line() +
+  facet_grid(rows = vars(indicator), cols = vars(quality), scales = "free") +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+```{r qld data map}
+#| fig-align: "center"
+#| code-summary: "Map of data available from outflow stations in Queensland"
+
+res_sparse %>% 
+  filter(state == "QLD" & indicator != "total_N") %>% 
+  filter(!quality %in% c(4, 5)) %>% # doesn't actually remove any data
+  ggplot(aes(x = month, y = outfall_conc_mgL, colour = name)) +
+  geom_line() +
+  facet_grid(rows = vars(indicator), cols = vars(quality), scales = "free") +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+```{r nsw data map}
+#| fig-align: "center"
+#| code-summary: "Map of data available from outflow stations in NSW"
+
+res_sparse %>% 
+  filter(state == "NSW" & indicator != "total_N") %>% 
+  filter(!quality %in% c(4, 5)) %>% # doesn't actually remove any data
+  ggplot(aes(x = month, y = outfall_conc_mgL, colour = name)) +
+  geom_line() +
+  facet_grid(rows = vars(indicator), cols = vars(quality), scales = "free") +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+```{r nt data map, eval=FALSE}
+#| fig-align: "center"
+#| code-summary: "Map of data available from outflow stations in NT"
+
+res_sparse %>% 
+  filter(state == "NTE" & indicator != "total_N") %>% 
+  filter(!quality %in% c(4, 5)) %>% # doesn't actually remove any data
+  ggplot(aes(x = month, y = outfall_conc_mgL, colour = name)) +
+  geom_line() +
+  facet_grid(rows = vars(indicator), cols = vars(quality), scales = "free") +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+
+
+
+
+

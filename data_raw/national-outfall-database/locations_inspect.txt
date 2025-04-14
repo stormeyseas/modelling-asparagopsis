@@ -1,0 +1,189 @@
+site_id,name
+5621,Alkimos
+5571,Altona
+5574,Anglesea WRP
+5576,Apollo Bay WRP
+5656,Bargara
+5171,Batemans Bay
+5578,Baxter's Beach
+5285,Beenleigh
+5624,Beenyup
+5174,Bellambi
+5176,Belmont
+5179,Bermagui
+5252,Berrimah
+5452,Bicheno
+5580,Black Rock WRP
+5455,Blackmans Bay
+5583,Boags Rock (Eastern Treatment Plant)
+5586,Boags Rock (Mt Martha Somers Boneo)
+5458,Boat Harbour
+5424,Bolivar High Salinity
+5427,Bolivar WWTP
+5182,Bombo
+5185,Bondi
+5187,Boulder Bay
+5288,Bowen
+5461,Bridgewater
+5464,Bridport
+5627,Bunbury
+5658,Bundaberg North
+5290,Bundamba
+14232,Burnie
+5292,Burpengary East
+5189,Burwood beach (Newcastle)
+5630,Busselton (North Wetlands)
+5632,Busselton (South Wetlands)
+5294,Caboolture South
+14206,Cambridge/airport
+5192,Camden Haven
+5470,Cameron Bay
+5297,Cannonvale
+5300,Capalaba
+5303,Carole Park
+5430,Christies Beach-Northern
+5432,Christies Beach-Southern
+5635,Christmas Island
+5306,Cleveland Bay
+5194,Coffs Harbour
+5196,Coniston Beach (Wollongong)
+5309,Coolum
+5312,Coombabah
+5199,Crescent Head
+5473,Currie
+5476,Cygnet
+5588,Delray Beach
+14099,Diamond Bay North
+14101,Diamond Bay South
+5479,Dover
+5315,East Bundaberg
+5637,East Rockingham
+5482,East Strahan
+5207,Eden
+5318,Edmonton
+5320,Elanora
+5485,Electrona
+5323,Eli Creek (Hervey Bay)
+5326,Fairfield
+5434,Finger Point
+5209,Forster
+5591,Foster
+5254,Galiwinku
+5660,Geeveston
+5488,George Town
+5329,Gibson Island
+5331,Gladstone
+5437,Glenelg
+5334,Goodna
+5491,Hoblers Bridge
+5640,Home Island
+5211,Iluka
+5337,Innisfail
+5340,Karana Downs
+5343,Kawana
+5345,Landsborough
+5662,Latrobe (see Pardoe)
+5257,Leanyer Sanderson
+5348,Loganholme
+5213,Long Nose (Tomakin)
+5594,Lorne WRP
+5351,Lucinda
+5260,Ludmilla
+5262,Ludmilla overflow
+5354,Luggage Point
+5356,Mackay North (Bucasia)
+5358,Mackay Southern
+5494,Macquarie Point
+5215,Malabar
+5264,Maningrida
+5496,Margate
+5361,Marlin Coast
+5363,Maroochydore
+5366,Maryborough
+5596,McGaurans Beach
+5217,Merimbula
+5369,Merrimac
+5499,Midway Point
+5266,Milikapiti
+5268,Milingimbi
+5372,Millbank
+5270,Milyakburra
+5272,Minjilang
+5375,Mt St John
+5378,Murrumba Downs
+5381,Nambour
+5219,Narooma
+5502,Newnham
+5222,Norah Head (Toukley)
+5224,North Head
+5384,North Rockhampton
+5505,Orford
+5387,Oxley
+5275,Palmerston
+14222,Pardoe
+14112,Penguin Heads
+5598,Phillip Island
+5277,Pirlangimpi
+5642,Point Peron
+5511,Port Arthur
+5440,Port Augusta East
+5390,Port Douglas
+5604,Port Fairy Industrial WRP
+14258,Port Fairy WRP
+5228,Port Kembla
+5443,Port Lincoln
+5446,Port Pirie
+5514,Port Sorell
+5607,Port Welshpool
+5609,Portland
+5230,Potter Point (Cronulla)
+5517,Prince of Wales Bay
+5393,Pulgul Creek
+5396,Redcliffe
+5519,Richmond
+5522,Risdon (east)
+5525,Riverside
+5528,Rokeby
+5531,Rosny
+5654,Rubyanna
+5398,Sandgate
+5537,Selfs Point
+5233,Shellharbour
+5540,Sisters Beach
+5235,Skennars Head (Lennox Head)
+5543,Smithton
+5546,Somerset
+5548,Sorell
+5400,South Rockhampton
+5402,South Trees Inlet
+5405,Southern WWTP (Woree)
+5551,St Helens
+5554,Stanley
+5645,Subiaco
+5675,Swansea
+5407,Thorneside
+5557,Ti-tree Bend
+5410,Tin Can Bay
+5612,Toora
+5560,Triabunna
+5563,Turners Beach
+5237,Ulladulla
+5565,Ulverstone
+5239,Vaucluse
+5413,Victoria Point
+5416,Wacol
+5242,Warriewood
+5615,Warrnambool WRP
+5279,Warruwi
+14265,Werribee (Port Phillip Bay)
+5418,West Rockhampton
+5449,Whyalla
+5648,Wickham
+14121,Winney Bay (Kincumber)
+5247,Wonga Point (Bateau Bay)
+5651,Woodman Point
+5281,Wurrumiyanga
+5421,Wynnum
+5568,Wynyard
+5249,Yamba
+5283,Yirrkala
