@@ -1,0 +1,10 @@
+BARRA2 available variable:
+https://opus.nci.org.au/spaces/NDP/pages/338002591/BARRA2+Parameter+Descriptions
+
+From BARRA2 used:
+
+rsdsdir		Surface Direct Downwelling Shortwave Radiation (W m-2)
+	This parameter is the direct shortwave radiation from the Sun, incident on the Earth's surface. It is a flux parameter to indicate it is a quantity expressed as per unit area. Different from the diffused shortwave radiation, it consists of rays that come directly from the Sun's position in the sky. The parameter has been corrected for the solar zenith angle and the effect of topography.
+
+ts*			Surface Temperature (K)
+	This parameter is the temperature of the land or sea/sea-ice surface of the Earth. Over land, this is the surface skin temperature. On ice-free sea areas, it is the temperature of sea surface. On sea areas with ice, it is a ice fraction weighted sum of temperature of top ice layer and freezing point of sea water. It has units of kelvin (K) and can be converted to degrees Celsius by subtracting 273.15. This parameter is available as instantaneous and time-averaged quantities.
