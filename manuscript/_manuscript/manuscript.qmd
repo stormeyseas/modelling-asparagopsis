@@ -1,0 +1,1316 @@
+---
+title: Investigating the bioremediation potential of seaweed aquaculture across Australia
+date: last-modified
+bibliography: [../resources/refs.bib, ../resources/manual-refs.bib]
+
+format:
+  html:
+    theme: simplex
+    css: [../resources/extra.css]
+    code-fold: true
+    code-overflow: wrap
+    toc: true
+    toc-expand: true
+    toc-location: left
+    toc-depth: 4
+    lang: en-GB
+    grid:
+      sidebar-width: 400px
+      body-width: 1200px
+      margin-width: 100px
+      gutter-width: 2em
+        
+execute:
+  eval: false
+  cache: true
+  fig-height: 6
+  fig-width: 4
+  freeze: auto
+
+knitr: 
+  opts_chunk:
+    fig.align: center
+    fig.width: 6
+---
+
+```{r setup}
+#| eval: true
+#| include: false
+#| cache: false
+
+# You need quarto to generate this markdown - install here: https://quarto.org/docs/get-started/
+# This markdown uses the acronyms extension - install by entering quarto add rchaput/acronyms@master into the terminal
+# This markdown uses TinyTex for PDF rendering - install with tinytex::install_tinytex()
+
+library(stringr)
+library(units)
+library(targets)
+library(tarchetypes)
+library(macrogrow)
+library(ozmaps)
+library(arrow)
+library(gganimate)
+library(magrittr)
+library(ggplot2)
+library(dplyr)
+library(terra)
+library(tidyterra)
+library(here)
+library(lubridate)
+library(tidyr)
+```
+
+```{r global variables and functions}
+#| eval: true
+#| include: false
+#| cache: false
+
+# source(file.path(base_path, "R", "other-functions.R"))
+spec_store <- here() %>% file.path("targets_outputs", "_species")
+cell_store <- here() %>% file.path("targets_outputs", "_model_running_TAS")
+spec_data <- here() %>% file.path("data", "processed_species")
+cell_data <- here() %>% file.path("data", "processed_cell_data")
+runs_data <- here() %>% file.path("data", "processed_model_running")
+
+bounds <- tar_read(states_bbox, store = cell_store)
+
+prettyplot <- theme_classic() +
+  theme(text = element_text(family = "sans", size = 12, colour = "black"),
+        axis.title = element_text(vjust = 2),
+        legend.position = "none")
+
+env_plot <- prettyplot +
+  theme(legend.position = "none",
+        aspect.ratio = 0.55,
+        text = element_text(family = "sans", size = 11, colour = "black"))
+
+nitrogen_lab <- expression("Concentration ("*mu*"M N)")
+nitrate_lab <- expression("Nitrate concentration ("*mu*"M NO"[3]*")")
+ammonium_lab <- expression("Ammonium concentration ("*mu*"M NH"[4]^+")")
+
+# Allows using "units" package to convert between moles and g of nitrogen ONLY
+remove_unit("mol")
+install_unit("mol", "14.0067 g")
+
+prettynum <- function(num, sigfig=2) {format(round(as.numeric(num), sigfig), nsmall=1, big.mark=",")}
+
+species_pal <- c("red3", "dodgerblue3")
+depths_pal <- c("green3", "#FF8247", "dodgerblue3", "#292928")
+states_pal <- c("#d95f02", "#e6ab02", "#7570b3", "#1b9e77", "#66a61e", "#e7298a", "#a6761d", "#666666")
+scens_pal_1 <- c("#292928", "dodgerblue3", "#66a61e", "#e7298a", "#e6ab02")
+scens_pal_2 <- c("dodgerblue3", "#66a61e", "#e7298a", "#e6ab02")
+states_pal_2 <- c(states_pal, "black")
+states <- tar_read(states, store = cell_store)
+states_ord <- c("NTE", "QLD", "NSW", "SAU", "TAS", "VIC", "WAN", "WAS")
+states_lng <- c("Northern Territory", "Queensland", "New South Wales", "South Australia", "Tasmania", "Victoria", "Western Australia (N)", "Western Australia (S)")
+```
+
+# Methods {#sec-methods}
+
+```{r cell-coords}
+#| eval: true
+#| code-summary: |
+#|   Load in all the BARRA2 cells being used, with their coordinates.
+
+cell_coords <- tar_read(BARRA_C2_cell_coords, store = cell_store) %>% 
+  mutate(state = factor(state, levels = states_ord)) %>% 
+  dplyr::select(-layer)
+
+totals <- cell_coords %>% 
+  group_by(state) %>% 
+  reframe(cells = n())
+```
+
+There were a total of `r sum(totals$cells)` cells used in this analysis: 
+`r as.integer(totals$cells[totals$state == "VIC"])` in Victoria, 
+`r as.integer(totals$cells[totals$state == "NSW"])` in New South Wales, 
+`r as.integer(totals$cells[totals$state == "QLD"])` in Queensland, 
+`r as.integer(totals$cells[totals$state == "SAU"])` in South Australia, 
+`r as.integer(totals$cells[totals$state == "WAN"]+totals$cells[totals$state == "WAS"])` in Western Australia (divided into 
+`r as.integer(totals$cells[totals$state == "WAN"])` cells in the north and 
+`r as.integer(totals$cells[totals$state == "WAS"])` in the south), 
+`r as.integer(totals$cells[totals$state == "TAS"])` in Tasmania, and 
+`r as.integer(totals$cells[totals$state == "NTE"])` in the Northern Territory. 
+
+```{r fig-states-map}
+#| eval: true
+#| fig-cap: |
+#|   Map showing the area included this analysis, with colours indicating the different states. The ~60 km coastline buffer includes 11,709 cells approximately 12 x 12 km each.
+#| fig-width: 8
+#| fig-height: 7
+
+ggplot(cell_coords, aes(x = longitude, y = latitude, fill = state)) +
+  geom_raster() +
+  geom_sf(data = ozmap_data(data = "states"), inherit.aes = F) +
+  coord_sf(xlim = c(bounds[["AUS"]]["lonmin"], bounds[["AUS"]]["lonmax"]),
+           ylim = c(bounds[["AUS"]]["latmin"], bounds[["AUS"]]["latmax"])) +
+  scale_x_continuous(breaks = seq(100, 160, 5)) +
+  scale_y_continuous(breaks = seq(-5, -45, -5)) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(x = "Longitude", y = "Latitude") +
+  prettyplot +
+  theme(legend.position = "none")
+```
+
+```{r bathymetry data}
+#| eval: true
+#| cache: true
+
+BathyTopo_NSW <- tar_read(cell_bathy, store = here() %>% file.path("targets_outputs", "_model_running_NSW"))
+# BathyTopo_TAS <- tar_read(cell_bathy, store = here() %>% file.path("targets_outputs", "_model_running_TAS"))
+# BathyTopo_VIC <- tar_read(cell_bathy, store = here() %>% file.path("targets_outputs", "_model_running_VIC"))
+# BathyTopo_NTE <- tar_read(cell_bathy, store = here() %>% file.path("targets_outputs", "_model_running_NTE"))
+# BathyTopo_QLD <- tar_read(cell_bathy, store = here() %>% file.path("targets_outputs", "_model_running_QLD"))
+# BathyTopo_SAU <- tar_read(cell_bathy, store = here() %>% file.path("targets_outputs", "_model_running_SAU"))
+# BathyTopo_WAN <- tar_read(cell_bathy, store = here() %>% file.path("targets_outputs", "_model_running_WAN"))
+# BathyTopo_WAS <- tar_read(cell_bathy, store = here() %>% file.path("targets_outputs", "_model_running_WAS"))
+```
+
+## Environmental inputs {#sec-envinputs}
+
+```{r all-cell-input-timeseries}
+#| eval: true
+
+cell_input_timeseries <- list(
+  here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_TAS.parquet") %>% read_parquet(),
+  here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_VIC.parquet") %>% read_parquet(),
+  here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_NSW.parquet") %>% read_parquet(),
+  here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_NTE.parquet") %>% read_parquet(),
+  here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_QLD.parquet") %>% read_parquet(),
+  here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_SAU.parquet") %>% read_parquet(),
+  here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_WAN.parquet") %>% read_parquet(),
+  here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_WAS.parquet") %>% read_parquet()
+  ) %>% 
+  bind_rows() %>% 
+  mutate(state = factor(state, levels = states_ord, labels = states_lng))
+```
+
+```{r T input data}
+#| eval: true
+
+T_input <- cell_input_timeseries %>% 
+  select(cell_no, state, yday, T_input)
+
+(T_means <- T_input %>% 
+  group_by(state) %>% 
+  reframe(mean = mean(T_input, na.rm = T),
+          max = max(T_input, na.rm = T),
+          min = min(T_input, na.rm = T)) %>% 
+  mutate(variable = "T_input"))
+```
+
+Mean daily temperature ranged from 
+`r round(min(T_means$mean), 1)` in `r as.character(T_means$state[T_means$mean == min(T_means$mean)])` to 
+`r round(max(T_means$mean), 1)` in `r as.character(T_means$state[T_means$mean == max(T_means$mean)])`,
+with a mean across states of `r round(mean(T_means$mean), 1)`. 
+
+```{r fig-T-input}
+#| eval: true
+#| fig-height: 8
+#| fig-cap: |
+#|   Summary of temperature values across the year within each state, averaged across 2019-2023. Bold lines show the mean across all cells within each state while ribbons show the standard deviation between cells.
+
+T_input_state <- T_input %>%
+  group_by(state, yday) %>% 
+  reframe(value = mean(T_input, na.rm = T),
+          sd = sd(T_input, na.rm = T))
+
+(
+  p_input_state_av <- T_input_state %>% 
+    ggplot(aes(x = yday, y = value, ymin = value-sd, ymax = value+sd, colour = state, fill = state)) +
+    geom_line(linewidth = 0.75) +
+    geom_ribbon(alpha = 0.35, linewidth = 0.25) +
+    facet_wrap(facets = vars(state), ncol = 2) +
+    scale_y_continuous(breaks = seq(0, 40, 5), limits = c(10, 35)) +
+    scale_fill_brewer(palette = "Dark2") +
+    scale_color_brewer(palette = "Dark2") +
+    env_plot +
+    labs(x = "Day of the year", y = expression("Temperature ("*degree*"C)"))
+)
+```
+
+```{r I input data}
+#| eval: true
+
+I_input <- cell_input_timeseries %>% 
+  select(cell_no, state, yday, I_input)
+
+(I_means <- I_input %>% 
+  group_by(state) %>% 
+  reframe(mean = mean(I_input, na.rm = T),
+          max = max(I_input, na.rm = T),
+          min = min(I_input, na.rm = T)) %>% 
+  mutate(variable = "I_input"))
+```
+
+Mean daily irradiance ranged from 
+`r round(min(I_means$mean), 0)` in `r as.character(I_means$state[I_means$mean == min(I_means$mean)])` to 
+`r round(max(I_means$mean), 0)` in `r as.character(I_means$state[I_means$mean == max(I_means$mean)])`,
+with a mean across states of `r round(mean(I_means$mean), 0)`. 
+
+```{r fig-I-input}
+#| eval: true
+#| fig-height: 8
+#| fig-cap: |
+#|   Summary of irradiance values across the year within each state, averaged across 2019-2023. Bold lines show the mean across all cells within each state while ribbons show the standard deviation between cells. 
+
+I_input_state <- I_input %>%
+  group_by(state, yday) %>% 
+  reframe(value = mean(I_input, na.rm = T),
+          sd = sd(I_input, na.rm = T))
+
+p_input_state_av %+% I_input_state +
+  scale_y_continuous(breaks = seq(0, 1600, 150), limits = c(0, 750)) +
+  labs(x = "Day of the year", y = expression("Irradiance (photons m"^-2*" s"^-1*")")) 
+```
+
+```{r S input data}
+#| eval: true
+
+S_input <- cell_input_timeseries %>% 
+  select(cell_no, state, yday, S_input)
+
+(S_means <- S_input %>% 
+  group_by(state) %>% 
+  reframe(mean = mean(S_input, na.rm = T),
+          max = max(S_input, na.rm = T),
+          min = min(S_input, na.rm = T)) %>% 
+  mutate(variable = "S_input"))
+```
+
+Mean daily salinity ranged from 
+`r round(min(S_means$mean), 1)` in `r as.character(S_means$state[S_means$mean == min(S_means$mean)])` to 
+`r round(max(S_means$mean), 1)` in `r as.character(S_means$state[S_means$mean == max(S_means$mean)])`,
+with a mean across states of `r round(mean(S_means$mean), 1)`. 
+
+```{r fig-S-input}
+#| eval: true
+#| fig-height: 8
+#| fig-cap: |
+#|   Summary of salinity values across the year within each state, averaged across 2019-2023 and all depths < 25 m. Bold lines show the mean across all cells within each state while ribbons show the standard deviation between cells.
+
+S_input_state <- S_input %>%
+  group_by(state, yday) %>% 
+  reframe(value = mean(S_input, na.rm = T),
+          sd = sd(S_input, na.rm = T))
+
+p_input_state_av %+% S_input_state +
+  scale_y_continuous(breaks = seq(30, 40, 0.5), limits = c(34, 36.5)) +
+  labs(x = "Day of the year", y = expression("Salinity (g L"^-1*")"))
+```
+
+```{r UV_input data}
+#| eval: true
+
+UV_input <- cell_input_timeseries %>% 
+  select(cell_no, state, yday, UV_input)
+
+(UV_means <- UV_input %>% 
+  group_by(state) %>% 
+  reframe(mean = mean(UV_input, na.rm = T),
+          max = max(UV_input, na.rm = T),
+          min = min(UV_input, na.rm = T)) %>% 
+  mutate(variable = "UV_input"))
+```
+
+Mean daily water velocity ranged from 
+`r round(min(UV_means$mean), 2)` in `r as.character(UV_means$state[UV_means$mean == min(UV_means$mean)])` to 
+`r round(max(UV_means$mean), 2)` in `r as.character(UV_means$state[UV_means$mean == max(UV_means$mean)])`,
+with a mean across states of `r round(mean(UV_means$mean), 2)`. 
+
+```{r fig-UV-input}
+#| eval: true
+#| fig-height: 8
+#| fig-cap: |
+#|   Summary of water velocity values across the year within each state, averaged across 2019-2023 and all depths < 25 m. Bold lines show the mean across all cells within each state while ribbons show the standard deviation between cells.
+
+UV_input_state <- UV_input %>%
+  group_by(state, yday) %>% 
+  reframe(value = mean(UV_input, na.rm = T),
+          sd = sd(UV_input, na.rm = T)) %>% 
+  mutate(sd_min = case_when(sd > value ~ value, T ~ sd))
+
+(
+  p_input_state_av <- UV_input_state %>% 
+    ggplot(aes(x = yday, y = value, ymin = value-sd_min, ymax = value+sd, colour = state, fill = state)) +
+    geom_line(linewidth = 0.75) +
+    geom_ribbon(alpha = 0.35, linewidth = 0.25) +
+    facet_wrap(facets = vars(state), ncol = 2) +
+    scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(-0.01, 1)) +
+    scale_fill_brewer(palette = "Dark2") +
+    scale_color_brewer(palette = "Dark2") +
+    env_plot +
+    labs(x = "Day of the year", y = expression("Water velocity (m s"^-1*")"))
+)
+```
+
+## Nitrogen {#sec-nitrogen}
+
+```{r N-data sources locations}
+#| eval: true
+
+refstation_locations <- here() %>% 
+  file.path("data", "nitrogen", "refstation_locations.parquet") %>% 
+  arrow::read_parquet() %>% 
+  mutate(state = case_when(
+    lon > bounds[["SAU"]]["lonmin"] & lon <= bounds[["SAU"]]["lonmax"] & 
+      lat > bounds[["SAU"]]["latmin"] & lat <= bounds[["SAU"]]["latmax"]  ~ "SAU",
+    lon > bounds[["QLD"]]["lonmin"] & lon <= bounds[["QLD"]]["lonmax"] & 
+      lat > bounds[["QLD"]]["latmin"] & lat <= bounds[["QLD"]]["latmax"]  ~ "QLD",
+    lon > bounds[["WAS"]]["lonmin"] & lon <= bounds[["WAS"]]["lonmax"] & 
+      lat > bounds[["WAS"]]["latmin"] & lat <= bounds[["WAS"]]["latmax"]  ~ "WAS",
+    lon > bounds[["WAN"]]["lonmin"] & lon <= bounds[["WAN"]]["lonmax"] & 
+      lat > bounds[["WAN"]]["latmin"] & lat <= bounds[["WAN"]]["latmax"]  ~ "WAN",
+    lon > bounds[["VIC"]]["lonmin"] & lon <= bounds[["VIC"]]["lonmax"] & 
+      lat > bounds[["VIC"]]["latmin"] & lat <= bounds[["VIC"]]["latmax"]  ~ "VIC",
+    lon > bounds[["NSW"]]["lonmin"] & lon <= bounds[["NSW"]]["lonmax"] & 
+      lat > bounds[["NSW"]]["latmin"] & lat <= bounds[["NSW"]]["latmax"]  ~ "NSW",
+    lon > bounds[["NTE"]]["lonmin"] & lon <= bounds[["NTE"]]["lonmax"] & 
+      lat > bounds[["NTE"]]["latmin"] & lat <= bounds[["NTE"]]["latmax"]  ~ "NTE",
+    lon > bounds[["TAS"]]["lonmin"] & lon <= bounds[["TAS"]]["lonmax"] & 
+      lat > bounds[["TAS"]]["latmin"] & lat <= bounds[["TAS"]]["latmax"]  ~ "TAS",
+    TRUE ~ NA
+  ),
+  state = factor(state, levels = states_ord)) %>% 
+  rename(latitude = lat, longitude = lon, name = StationName) %>% 
+  dplyr::select(-code) %>% 
+  relocate(state, .before = name)
+
+outfall_locations <- here() %>% 
+  file.path("data_raw", "national-outfall-database", "data-output", "outflow_site_locations.parquet") %>% 
+  arrow::read_parquet() %>% 
+  mutate(state = factor(state, levels = states_ord)) %>% 
+  relocate(state, .before = name)
+
+N_locations <- rbind(
+  outfall_locations %>% mutate(type = "outfall"),
+  refstation_locations %>% mutate(type = "refstation")
+)
+```
+
+Each cell was matched to its two nearest \acr{IMOS} reference stations, which were weighted by distance from the cell and together formed the nutrient baseline. Outfall points were matched to multiple cells within a 48 km radius and their influence was considered inversely proportional to the distance between the cell centre and the outfall. 
+
+```{r fig-N-data-locations}
+#| eval: true
+#| fig-width: 8
+#| fig-height: 7
+#| fig-cap: Map showing the locations of recorded outfalls (points, coloured by state) and the IMOS reference stations (stars) used in this analysis.
+
+ggplot(N_locations, aes(x = longitude, y = latitude, color = state, shape = type)) +
+  geom_sf(data = ozmap_data(data = "states"), inherit.aes = F) +
+  coord_sf(xlim = c(bounds[["AUS"]]["lonmin"], bounds[["AUS"]]["lonmax"]),
+           ylim = c(bounds[["AUS"]]["latmin"], bounds[["AUS"]]["latmax"])) +
+  geom_point(size = 3.5) +
+  scale_shape_manual(values = c(20, 8)) +
+  # scale_colour_manual(values = states_pal, labels = states_lng, na.value = "black") +
+  scale_color_brewer(palette = "Dark2") +
+  scale_x_continuous(breaks = seq(100, 160, 5)) +
+  scale_y_continuous(breaks = seq(-5, -45, -5)) +
+  labs(x = "Longitude", y = "Latitude") +
+  prettyplot +
+  theme(legend.position = "none")
+```
+
+Data from the \acr{IMOS} reference stations at Bonney Coast, Esperance and Ningaloo were too sporadic to be useful and their datasets were very similar to their closest neighbour stations, so their data were excluded. This left stations at Darwin, Maria Island, North Stradbroke Island, Port Hacking, Rottnest Island and Yongala for the current analysis. 
+
+```{r refstation-cell-matching}
+#| eval: true
+
+refstation_cell_match <- list(
+  # file.path(cell_data, "refstation_cell_match_NTE.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "refstation_cell_match_TAS.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "refstation_cell_match_VIC.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "refstation_cell_match_QLD.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "refstation_cell_match_SAU.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "refstation_cell_match_WAN.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "refstation_cell_match_WAS.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "refstation_cell_match_NSW.parquet") %>% arrow::read_parquet()
+  ) %>% 
+  bind_rows() %>% 
+  group_by(StationName) %>% 
+  reframe(num_cells = n())
+```
+
+Matching model cells to their two nearest reference stations resulted in 
+`r round(100*refstation_cell_match$num_cells[refstation_cell_match$StationName == "Darwin"]/sum(totals$cells), 2)`% cells using data from Darwin, 
+`r round(100*refstation_cell_match$num_cells[refstation_cell_match$StationName == "Kangaroo Island"]/sum(totals$cells), 2)`% from Kangaroo Island, 
+`r round(100*refstation_cell_match$num_cells[refstation_cell_match$StationName == "Maria Island"]/sum(totals$cells), 2)`% from Maria Island, 
+`r round(100*refstation_cell_match$num_cells[refstation_cell_match$StationName == "North Stradbroke Island"]/sum(totals$cells), 2)`% from North Stradbroke Island, 
+`r round(100*refstation_cell_match$num_cells[refstation_cell_match$StationName == "Port Hacking"]/sum(totals$cells), 2)`% from Port Hacking, 
+`r round(100*refstation_cell_match$num_cells[refstation_cell_match$StationName == "Rottnest Island"]/sum(totals$cells), 2)`% from Rottnest Island, and 
+`r round(100*refstation_cell_match$num_cells[refstation_cell_match$StationName == "Yongala"]/sum(totals$cells), 2)`% from Yongala.
+
+Outfall data from \acr{NOD} are only recorded as monthly observations of the water being added to coastal conditions, rather than ambient conditions in coastal waters. Data from outfall stations was only included if $\geq$ 20 observations were made within the past 10 years (2014-2023). If $\geq$ 20 observations were made from the period of 2019-2023, then the data were restricted to that period. One outfall station was fully excluded (Pardoe, in northern Tasmania) as the concentrations recorded were ~6 orders of magnitude higher than any other station and it was presumed that this was a data reporting error. While there is at least one outfall in each state, they are much more abundant in Victoria, Tasmania, New South Wales and Queensland. 
+
+```{r outfall-cell-matching}
+#| eval: true
+
+outfall_sites_cellpaired <- list(
+  # file.path(cell_data, "outfall_sites_cellpaired_NTE.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "outfall_sites_cellpaired_TAS.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "outfall_sites_cellpaired_VIC.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "outfall_sites_cellpaired_QLD.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "outfall_sites_cellpaired_SAU.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "outfall_sites_cellpaired_WAN.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "outfall_sites_cellpaired_WAS.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "outfall_sites_cellpaired_NSW.parquet") %>% arrow::read_parquet()
+  ) %>% 
+  bind_rows() %>% 
+  group_by(state, cell_no) %>% 
+  reframe(matched = n())
+```
+
+There were 
+`r nrow(outfall_locations[outfall_locations$state == "SAU", ])` outfall stations in South Australia, 
+`r nrow(outfall_locations[outfall_locations$state == "WAS", ])` in southern Western Australia, 
+`r nrow(outfall_locations[outfall_locations$state == "NTE", ])` in the Northern Territory, and 
+`r nrow(outfall_locations[outfall_locations$state == "WAN", ])` in northern Western Australia. 
+
+Matching cells to outfall stations within 48 km resulted in 
+`r round(100*length(outfall_sites_cellpaired$matched[outfall_sites_cellpaired$matched == 1])/sum(totals$cells), 2)`% of cells using data from one outfall site,
+`r round(100*length(outfall_sites_cellpaired$matched[outfall_sites_cellpaired$matched == 2])/sum(totals$cells), 2)`% of cells using data from two sites,
+`r round(100*length(outfall_sites_cellpaired$matched[outfall_sites_cellpaired$matched == 3])/sum(totals$cells), 2)`% of cells using data from three sites,
+`r round(100*length(outfall_sites_cellpaired$matched[outfall_sites_cellpaired$matched == 4])/sum(totals$cells), 2)`% of cells using data from four sites,
+`r round(100*length(outfall_sites_cellpaired$matched[outfall_sites_cellpaired$matched == 5])/sum(totals$cells), 2)`% of cells using data from five sites, and 
+`r round(100*length(outfall_sites_cellpaired$matched[outfall_sites_cellpaired$matched == 6])/sum(totals$cells), 2)`% of cells using data from six sites. 
+The remaining 
+`r round(100*length(outfall_sites_cellpaired$matched[is.na(outfall_sites_cellpaired$matched)])/sum(totals$cells), 2)`% of cells did not use data from any outfall sites. 
+
+These two nutrient data sources were combined into a single “typical” year for each nutrient, with outfall data being additionally weighted by the total volume of water recorded from the outfall location relative to a cell’s volume of surface water (4 km $\times$ 4 km $\times$ 12.5 m). Finally, a small degree of random variation (up to $\pm$10% of standard deviation from the mean) was added to daily values of nitrate and ammonium. This was done to better reflect the high degree of variability generally recorded in nitrate and ammonium levels, forcing the macroalgae in the model to contend with some instability in its nutrient supply. fig-example-N-input shows an example of the final nitrate and ammonium concentrations driving the growth model in a single cell, located in New South Wales.
+
+```{r fig-example-N-input}
+#| eval: true
+#| cache: true
+#| fig-width: 6
+#| fig-height: 6
+#| fig-cap: An example of the daily nitrate (top) and ammonium (bottom) input and data for a single cell in New South Wales. Black lines show the input driving the growth model (constructed curve), blue dots show data from the nearest reference station (Port Hacking) and orange dots show distance-weighted data from the three nearest outfall points (Bateman’s Bay, Bermagui, and Bombo). 
+
+df2 <- cell_input_timeseries %>% 
+  dplyr::filter(cell_no == 753076) %>% 
+  dplyr::select(c(yday, Ni_input, Am_input)) %>% 
+  pivot_longer(names_to = "form", values_to = "value", cols = c(Ni_input, Am_input)) %>% 
+  mutate(form = factor(form, levels = c("Ni_input", "Am_input"), labels = c("1", "2")))
+  
+st <- here() %>% file.path("targets_outputs", "_model_running_NSW")
+BARRA_C2_cell_nos <- tar_read(BARRA_C2_cell_nos, store = st)
+ind <- which(BARRA_C2_cell_nos == 753076)
+
+day15 <- data.frame(month = 1:12, day = rep(15, 12)) %>%
+  mutate(yday = yday(make_date(year = 2023, month = month, day = day)))
+ 
+ref <- tar_read(refstation_cell_match, branches = ind, store = st)
+out <- tar_read(outfall_sites_cellpaired, branches = ind, store = st)
+
+Ni_data_prioritised <- tar_read(Ni_data_prioritised, store = st, branches = ind)[[1]]
+Ni_curve <- c(Ni_data_prioritised['a'], Ni_data_prioritised['b'], Ni_data_prioritised['c'])
+Ni_data_prioritised <- Ni_data_prioritised["data"][[1]] %>%
+  mutate(source = case_when(yday %in% day15$yday ~ "outfall", TRUE ~ "refstation"),
+         form = "1") %>%
+  merge(cell_coords, by = "cell_no")
+
+Am_data_prioritised <- tar_read(Am_data_prioritised, store = st, branches = ind)[[1]]
+Am_curve <- c(Am_data_prioritised['a'], Am_data_prioritised['b'], Am_data_prioritised['c'])
+Am_data_prioritised <- Am_data_prioritised["data"][[1]] %>%
+  mutate(source = case_when(yday %in% day15$yday ~ "outfall", TRUE ~ "refstation"),
+         form = "2") %>%
+  merge(cell_coords, by = "cell_no") %>% 
+  dplyr::select(-weighted_value)
+
+df <- rbind(Ni_data_prioritised, Am_data_prioritised) %>%
+  mutate(value = set_units(value, "mg m-3"),
+         value = set_units(value, "umol L-1"),
+         value = drop_units(value))
+  
+ggplot(df, aes(x = yday, y = value, color = as.factor(source))) +
+  geom_point() +
+  facet_wrap(facets = vars(form), nrow = 2) +
+  geom_line(data = df2, aes(x = yday, y = value), inherit.aes = F) +
+  scale_color_manual(values = c("orange", "steelblue")) +
+  scale_y_continuous(limits = c(0, 3.5), breaks = seq(0, 4, 0.5)) +
+  env_plot +
+  theme(strip.text = element_blank()) +
+  labs(x = "Day of the year", y = nitrogen_lab)
+```
+
+```{r Ni input data}
+#| eval: true
+
+Ni_input <- cell_input_timeseries %>% 
+  select(cell_no, state, yday, Ni_input)
+
+(Ni_means <- Ni_input %>% 
+  group_by(state) %>% 
+  reframe(mean = mean(Ni_input, na.rm = T),
+          max = max(Ni_input, na.rm = T),
+          min = min(Ni_input, na.rm = T)) %>% 
+  mutate(variable = "Ni_input"))
+```
+
+```{r fig-Ni-input}
+#| eval: true
+#| fig-width: 8
+#| fig-height: 7
+#| fig-cap: Summary of nitrate concentration values across the year within each state, averaged across 2019-2023. Bold lines show the mean across all cells within each state while ribbons show the standard deviation between cells.
+
+Ni_input_state <- Ni_input %>%
+  group_by(state, yday) %>% 
+  reframe(value = mean(Ni_input, na.rm = T),
+          sd = sd(Ni_input, na.rm = T))
+
+(
+  p_input_state_av <- Ni_input_state %>% 
+    ggplot(aes(x = yday, y = value, ymin = value-sd, ymax = value+sd, colour = state, fill = state)) +
+    geom_line(linewidth = 0.75) +
+    geom_ribbon(alpha = 0.35, linewidth = 0.25) +
+    facet_wrap(facets = vars(state), ncol = 2) +
+    # scale_y_continuous(breaks = seq(0, 40, 5), limits = c(10, 35)) +
+    scale_fill_brewer(palette = "Dark2") +
+    scale_color_brewer(palette = "Dark2") +
+    env_plot +
+    labs(x = "Day of the year", y = nitrate_lab)
+)
+```
+
+```{r Am input data}
+#| eval: true
+
+Am_input <- cell_input_timeseries %>% 
+  select(cell_no, state, yday, Am_input)
+
+(Am_means <- Am_input %>% 
+  group_by(state) %>% 
+  reframe(mean = mean(Am_input, na.rm = T),
+          max = max(Am_input, na.rm = T),
+          min = min(Am_input, na.rm = T)) %>% 
+  mutate(variable = "Am_input"))
+```
+
+```{r fig-Am-input}
+#| eval: true
+#| fig-width: 8
+#| fig-height: 7
+#| fig-cap: Summary of ammonium concentration values across the year within each state, averaged across 2019-2023. Bold lines show the mean across all cells within each state while ribbons show the standard deviation between cells.
+
+Am_input_state <- Am_input %>%
+  group_by(state, yday) %>% 
+  reframe(value = mean(Am_input, na.rm = T),
+          sd = sd(Am_input, na.rm = T))
+
+p_input_state_av %+% Am_input_state +
+  # scale_y_continuous(breaks = seq(30, 40, 0.5), limits = c(34, 36.5)) +
+  labs(x = "Day of the year", y = ammonium_lab)
+```
+
+## Sensitivity conditions
+
+```{r sens-conditions}
+#| eval: true
+#| cache: false
+
+library(patchwork)
+
+culture_depths <- tar_read(culture_depths, store = spec_store)
+factors <- tar_read(factors, store = spec_store)
+
+state_input_timeseries <- list(
+  file.path(cell_data, "state_input_timeseries_NTE.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "state_input_timeseries_TAS.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "state_input_timeseries_VIC.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "state_input_timeseries_QLD.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "state_input_timeseries_SAU.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "state_input_timeseries_WAS.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "state_input_timeseries_WAN.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "state_input_timeseries_NSW.parquet") %>% arrow::read_parquet()
+) %>% 
+  bind_rows()
+
+sens_cond <- file.path(spec_data, "sensitivity_conditions.parquet") %>% 
+  arrow::read_parquet()
+```
+
+Sensitivity runs started on the first of every month to cover annual variability, for 12 runs per year, with the same mean annual conditions looping from December to January. Sensitivity runs were conducted at culture depths of 0.5 m, 2 m, 3.5 m, and 5 m below the surface with a light attenuation coefficient of 0.65 (clear water). The canopy was always 2.5 m in height, and the total water column depth was always 50 m.
+Curves for temperature, surface irradiance, salinity, water velocity, nitrate and ammonium were constructed to capture “typical” conditions based on daily means of each state from 2019-2023. This resulted in two sensitivity curves for temperature (fig-state-temperature) and a single sensitivity curve for irradiance (fig-state-irradiance), water velocity (fig-state-water-velocity), salinity (fig-state-salinity), nitrate (fig-state-nitrate) and ammonium (fig-state-ammonium).
+
+```{r fig-state-temperature}
+#| eval: false
+#| cache: false
+#| fig-width: 8
+#| fig-height: 3.5
+#| fig-cap: Average temperatures in each state region (left, see Figure 2 for detail) and the two temperature curves used for sensitivity analysis (high and low, right).
+
+p1 <- state_input_timeseries %>% 
+  dplyr::select(state, yday, T_input_mean, T_input_sd) %>% 
+  mutate(state = factor(state, levels = states_ord)) %>% 
+  ggplot(aes(x = yday, y = T_input_mean, colour = state)) +
+  geom_line(linewidth = 0.75) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(x = "Day of the year", y = expression("Temperature ("*degree*"C)")) +
+  prettyplot +
+  theme(legend.position = "none")
+
+p2 <- sens_cond %>% 
+  dplyr::filter(t <= 365) %>% 
+  ggplot(aes(x = t, y = T_input, linetype = as.factor(T_level))) +
+  geom_line(linewidth = 0.75) +
+  labs(x = "Day of the year") +
+  prettyplot +
+  theme(legend.position = "none",
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+
+p1 + p2
+```
+
+```{r fig-state-irradiance}
+#| eval: false
+#| cache: false
+#| fig-width: 8
+#| fig-height: 3.5
+#| fig-cap: Average irradiance values in each state (left, see Figure 3 for detail) and the irradiance curve used for sensitivity analysis (right).
+
+p1 <- state_input_timeseries %>% 
+  dplyr::select(state, yday, I_input_mean, I_input_sd) %>% 
+  mutate(state = factor(state, levels = states_ord)) %>% 
+  ggplot(aes(x = yday, y = I_input_mean, colour = state)) +
+  geom_line(linewidth = 0.75) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_y_continuous(breaks = seq(0, 1600, 150), limits = c(0, 650)) +
+  labs(x = "Day of the year", y = expression("Irradiance (photons m"^-2*" s"^-1*")")) +
+  prettyplot +
+  theme(legend.position = "none")
+
+p2 <- sens_cond %>% 
+  dplyr::filter(t <= 365 & T_level == 1) %>% 
+  ggplot(aes(x = t, y = I_input)) +
+  geom_line(linewidth = 0.75) +
+  labs(x = "Day of the year") +
+  prettyplot +
+  theme(legend.position = "none",
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+
+p1 + p2
+```
+
+```{r fig-state-water-velocity}
+#| eval: false
+#| cache: false
+#| fig-width: 8
+#| fig-height: 3.5
+#| fig-cap: Average water velocity in each state region (left, see Figure 5 for detail) and the water velocity curve used for sensitivity analysis (right).
+#| 
+
+p1 <- state_input_timeseries %>% 
+  dplyr::select(state, yday, UV_input_mean, UV_input_sd) %>% 
+  mutate(state = factor(state, levels = states_ord)) %>% 
+  ggplot(aes(x = yday, y = UV_input_mean, colour = state)) +
+  geom_line(linewidth = 0.75) +
+  scale_color_brewer(palette = "Dark2") +
+  prettyplot +
+  theme(legend.position = "none") +
+  scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(-0.01, 1)) +
+  labs(x = "Day of the year", y = expression("Water velocity (m s"^-1*")"))
+
+p2 <- sens_cond %>% 
+  dplyr::filter(t <= 365 & T_level == 1) %>% 
+  ggplot(aes(x = t, y = U_input)) +
+  geom_line(linewidth = 0.75) +
+  labs(x = "Day of the year") +
+  prettyplot +
+  theme(legend.position = "none",
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+
+p1 + p2
+```
+
+```{r fig-state-salinity}
+#| eval: false
+#| cache: false
+#| fig-width: 8
+#| fig-height: 3.5
+#| fig-cap: Average salinity values in each state region (left, see Figure 4 for detail) and the salinity curve used for sensitivity analysis (right).
+
+p1 <- state_input_timeseries %>% 
+  dplyr::select(state, yday, S_input_mean, S_input_sd) %>% 
+  mutate(state = factor(state, levels = states_ord)) %>% 
+  ggplot(aes(x = yday, y = S_input_mean, colour = state)) +
+  geom_line(linewidth = 0.75) +
+  scale_color_brewer(palette = "Dark2") +
+  prettyplot +
+  theme(legend.position = "none") +
+  scale_y_continuous(breaks = seq(30, 40, 0.5), limits = c(34, 36.5)) +
+  labs(x = "Day of the year", y = expression("Salinity (g L"^-1*")"))
+
+p2 <- sens_cond %>% 
+  dplyr::filter(t <= 365 & T_level == 1) %>% 
+  ggplot(aes(x = t, y = S_input)) +
+  geom_line(linewidth = 0.75) +
+  labs(x = "Day of the year") +
+  prettyplot +
+  theme(legend.position = "none",
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+
+p1 + p2
+```
+
+```{r fig-sens-altogether}
+#| eval: true
+#| cache: false
+#| fig-width: 7.5
+#| fig-height: 8
+#| fig-cap: Average temperatures in each state region (left, see Figure 2 for detail) and the two temperature curves used for sensitivity analysis (high and low, right).
+
+library(cowplot)
+
+p1 <- sens_cond %>% 
+  dplyr::filter(t <= 365) %>% 
+  ggplot(aes(x = t, y = T_input, linetype = as.factor(T_level))) +
+  geom_line(linewidth = 0.75) +
+  scale_y_continuous(breaks = seq(10, 35, 5), limits = c(10, 33)) +
+  labs(y = expression("Temperature ("*degree*"C)")) +
+  prettyplot + 
+  annotate("text", x = -Inf, y = Inf, label = "A", hjust = 1.2, vjust = 1, size = 4, fontface = "plain") +
+  theme(legend.position = "none", axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank())
+
+p2 <- sens_cond %>% 
+  dplyr::filter(t <= 365 & T_level == 1) %>% 
+  ggplot(aes(x = t, y = I_input)) +
+  geom_line(linewidth = 0.75) +
+  scale_y_continuous(breaks = seq(0, 700, 100), limits = c(0, 610)) +
+  labs(y = expression("Irradiance ("*mu*"mol m"^-2*" s"^-1*")")) +
+  prettyplot + 
+  annotate("text", x = -Inf, y = Inf, label = "B", hjust = 1.2, vjust = 1, size = 4, fontface = "plain") +
+  theme(legend.position = "none", axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank())
+
+p3 <- sens_cond %>% 
+  dplyr::filter(t <= 365 & T_level == 1) %>% 
+  ggplot(aes(x = t, y = U_input)) +
+  geom_line(linewidth = 0.75) +
+  scale_y_continuous(breaks = seq(0, 0.6, 0.1), limits = c(0, 0.55)) +
+  labs(y = expression("Water velocity (m"^-1*" s"^-1*")")) +
+  prettyplot + 
+  annotate("text", x = -Inf, y = Inf, label = "C", hjust = 1.2, vjust = 1, size = 4, fontface = "plain") +
+  theme(legend.position = "none", axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank())
+
+p4 <- sens_cond %>% 
+  dplyr::filter(t <= 365 & T_level == 1) %>% 
+  ggplot(aes(x = t, y = S_input)) +
+  geom_line(linewidth = 0.75) +
+  scale_y_continuous(breaks = seq(34.5, 36.5, 0.2), limits = c(34.7, 35.3)) +
+  labs(y = expression("Salinity (g L"^-1*")")) +
+  prettyplot + 
+  annotate("text", x = -Inf, y = Inf, label = "D", hjust = 1.2, vjust = 1, size = 4, fontface = "plain") +
+  theme(legend.position = "none", axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank())
+
+p5 <- sens_cond %>% 
+  dplyr::filter(t <= 365 & T_level == 1) %>% 
+  ggplot(aes(x = t, y = Ni_input)) +
+  geom_line(linewidth = 0.75) +
+  scale_y_continuous(breaks = seq(0, 60, 10), limits = c(0, 55)) +
+  labs(y = nitrate_lab) +
+  prettyplot + 
+  annotate("text", x = -Inf, y = Inf, label = "E", hjust = 1.2, vjust = 1, size = 4, fontface = "plain") +
+  theme(legend.position = "none", axis.title.x = element_blank())
+
+p6 <- sens_cond %>% 
+  dplyr::filter(t <= 365 & T_level == 1) %>% 
+  ggplot(aes(x = t, y = Am_input)) +
+  geom_line(linewidth = 0.75) +
+  scale_y_continuous(breaks = seq(0, 10, 1), limits = c(0, 6.25)) +
+  labs(y = ammonium_lab) +
+  prettyplot + 
+  annotate("text", x = -Inf, y = Inf, label = "F", hjust = 1.2, vjust = 1, size = 4, fontface = "plain") +
+  theme(legend.position = "none", axis.title.x = element_blank())
+
+plot_grid(
+  plot_grid(p1, p2, p3, p4, p5, p6, ncol = 2, align = "hv"),
+  ggdraw() + draw_label("Day of the year", size = 12),
+  ncol = 1,
+  rel_heights = c(0.95, 0.05)  # Adjust these values to control spacing
+)
+```
+
+## Growth and bioremediation
+### Growth limitations
+
+```{r Ilim-testing}
+#| eval: true
+
+d_top_PL <- tar_read(d_top_PL, store = cell_store)
+
+Ilim_cell <- list(
+  # file.path(cell_data, "Ilim_cell_PL_NTE.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "Ilim_cell_PL_TAS.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "Ilim_cell_PL_VIC.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "Ilim_cell_PL_QLD.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "Ilim_cell_PL_SAU.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "Ilim_cell_PL_WAS.parquet") %>% arrow::read_parquet(),
+  # file.path(cell_data, "Ilim_cell_PL_WAN.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "Ilim_cell_PL_NSW.parquet") %>% arrow::read_parquet()
+) %>% 
+  bind_rows() %>% 
+  dplyr::select(-t)
+
+# Ilim_means <- Ilim_cell %>% 
+#   group_by(state, depth, yday) %>% 
+#   reframe(I_lim = mean(I_lim, na.rm = T))
+# 
+# ggplot(Ilim_means, aes(x = yday, y = I_lim, colour = depth)) +
+#   geom_line(linewidth = 0.75) +
+#   facet_wrap(facets = vars(state)) +
+#   theme_classic()
+
+Ilim_means <- Ilim_cell %>% 
+  group_by(state, depth) %>% 
+  reframe(I_sd = sd(I_lim, na.rm = T),
+          I_lim = mean(I_lim, na.rm = T))
+
+ggplot(Ilim_means, aes(x = state, y = I_lim, fill = depth, ymin = I_lim-I_sd, ymax = I_lim+I_sd)) +
+  geom_col(colour = "black", position = position_dodge(), width = 1) +
+  geom_errorbar(position = position_dodge(width = 1), width = 0.5) +
+  theme_classic()
+```
+
+```{r Ilim_cell-at-single-depth}
+#| eval: true
+
+Ilim_cell <- Ilim_cell %>% 
+  dplyr::filter(depth == "2.5") %>% 
+  dplyr::select(-c(irradiance, depth, state)) %>% 
+  merge(cell_coords, by = "cell_no")
+
+# var_rast <- terra::rast(list(x = Ilim_cell$longitude, y = Ilim_cell$latitude, z = Ilim_cell$I_lim))
+# crs(var_rast) <- "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
+```
+
+### Total growth and bioremediation
+
+# Results 
+## Species parameterisation
+
+```{r fig-N-uptake}
+#| eval: false
+#| fig-width: 6
+#| fig-height: 3.9
+#| fig-cap: |
+#|   Uptake rates of nitrate (solid lines) and ammonium (dashed lines) by _Asparagopsis_ (red), _Ulva_ (green), or _Ecklonia_ (blue) at varying ambient concentrations.
+
+N_uptake <- file.path(spec_data, "N_uptake.parquet") %>% 
+  read_parquet()
+
+ggplot(N_uptake, aes(x = uM, y = uptake_uM, linetype = form)) +
+  geom_line(linewidth = 0.75) +
+  labs(x = expression("Ambient concentration ("*mu*"M)"), y = expression("Uptake rate ("*mu*"mol gDW"^-1*"d"^-1*")")) +
+  scale_y_continuous(breaks = seq(0, 3.5, 0.05), limits = c(0, 0.30)) +
+  scale_x_continuous(breaks = seq(0, 30, 5), limits = c(0,25)) +
+  prettyplot + 
+  theme(legend.position = "none",
+        aspect.ratio = 0.65,
+        text = element_text(family = "sans", size = 10, colour = "black"))
+```
+
+```{r fig-temperature-response}
+#| eval: false
+#| fig-width: 6
+#| fig-height: 3.9
+#| fig-cap: |
+#|   Temperature-growth response of _Asparagopsis armata_ (blue), _Asparagopsis taxiformis_ (red).
+
+T_response <- file.path(spec_data, "T_response.parquet") %>% 
+  read_parquet() %>% 
+  mutate(species = factor(species, levels = c("taxi", "arma")))
+
+ggplot(T_response, aes(x = temp, y = Tlim, colour = species)) +
+  geom_line(linewidth = 0.75) +
+  labs(x = expression("Temperature ("*degree*"C)"), y = "Relative growth") +
+  scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0,1)) +
+  scale_x_continuous(breaks = seq(0, 40, 5), limits = c(0,35)) +
+  prettyplot + 
+  theme(
+    legend.position = "none",
+    legend.title = element_blank(),
+    aspect.ratio = 0.65,
+    text = element_text(family = "sans", size = 10, colour = "black")
+    )
+```
+
+```{r fig-light-response}
+#| eval: false
+#| fig-width: 6
+#| fig-height: 3.9
+#| fig-cap: |
+#|   Irradiance-growth response of _Asparagopsis_ when grown at 1 m depth (solid lines), 2 m (dashed), 5 (dot-dash) or 10 m depth (dotted lines) and with a starting Nf=500 mg m-3, of approx. 0.0005 g L-1. Light attenuation coefficient kW = 0.6 in all scenarios.  
+
+I_response <- file.path(spec_data, "I_response.parquet") %>% 
+  read_parquet() %>% 
+  mutate(depth_m = as.factor(depth_m))
+
+ggplot(I_response, aes(x = light, y = Ilim, linetype = as.factor(depth_m))) +
+  geom_line(linewidth = 0.75) +
+  facet_wrap(facets = vars(species)) +
+  labs(x = expression("Surface light (PPFD)"), y = "Relative growth") +
+  scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0,1)) +
+  scale_linetype_manual(values = c("solid", "dashed", "dotdash", "dotted")) +
+  prettyplot + 
+  theme(
+    legend.position = "none",
+    aspect.ratio = 0.65,
+    text = element_text(family = "sans", size = 10, colour = "black"),
+    strip.text = element_blank()
+    )
+```
+
+```{r fig-salinity-response}
+#| eval: false
+#| fig-width: 6
+#| fig-height: 3.9
+#| fig-cap: |
+#|   Salinity-growth response of _Asparagopsis_
+
+S_response <- file.path(spec_data, "S_response.parquet") %>% 
+  read_parquet()
+
+ggplot(S_response, aes(x = sali, y = Slim)) +
+  geom_line(linewidth = 0.75) +
+  labs(x = expression("Salinity (g L"^-1*")"), y = "Relative growth") +
+  scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0,1)) +
+  scale_x_continuous(breaks = seq(0, 60, 5), limits = c(19,45)) +
+  prettyplot + 
+  theme(
+    legend.position = "none",
+    aspect.ratio = 0.65,
+    text = element_text(family = "sans", size = 10, colour = "black")
+    )
+```
+
+```{r fig-all-responses}
+#| eval: true
+#| fig-width: 8
+#| fig-height: 7
+#| fig-cap: |
+#|   all responses
+
+library(gridExtra)
+library(grid)
+
+p1 <- ggplot(N_uptake, aes(x = uM, y = uptake_uM, linetype = form)) +
+  geom_line(linewidth = 0.75) +
+  labs(x = expression("Ambient concentration ("*mu*"M)"), y = expression("Uptake rate ("*mu*"mol gDW"^-1*"d"^-1*")")) +
+  scale_y_continuous(breaks = seq(0, 3.5, 0.05), limits = c(0, 0.30)) +
+  scale_x_continuous(breaks = seq(0, 30, 5), limits = c(0,25)) +
+  prettyplot + 
+  theme(legend.position = "none",
+        aspect.ratio = 0.75,
+        text = element_text(family = "sans", size = 10, colour = "black"))
+
+p2 <- ggplot(T_response, aes(x = temp, y = Tlim, colour = species)) +
+  geom_line(linewidth = 0.75) +
+  labs(x = expression("Temperature ("*degree*"C)"), y = "Relative growth") +
+  scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0,1)) +
+  scale_x_continuous(breaks = seq(0, 40, 5), limits = c(0,35)) +
+  prettyplot + 
+  theme(legend.position = "none",
+        legend.title = element_blank(),
+        aspect.ratio = 0.75,
+        text = element_text(family = "sans", size = 10, colour = "black"))
+
+p3 <- ggplot(I_response, aes(x = light, y = Ilim, linetype = as.factor(depth_m))) +
+  geom_line(linewidth = 0.75) +
+  facet_wrap(facets = vars(species)) +
+  labs(x = expression("Surface light (PPFD)"), y = "Relative growth") +
+  scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0,1)) +
+  scale_linetype_manual(values = c("solid", "dashed", "dotdash", "dotted")) +
+  prettyplot + 
+  theme(legend.position = "none",
+        aspect.ratio = 0.75,
+        text = element_text(family = "sans", size = 10, colour = "black"),
+        strip.text = element_blank())
+
+p4 <- ggplot(S_response, aes(x = sali, y = Slim)) +
+  geom_line(linewidth = 0.75) +
+  labs(x = expression("Salinity (g L"^-1*")"), y = "Relative growth") +
+  scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0,1)) +
+  scale_x_continuous(breaks = seq(0, 60, 5), limits = c(19,45)) +
+  prettyplot + 
+  theme(legend.position = "none",
+        aspect.ratio = 0.75,
+        text = element_text(family = "sans", size = 10, colour = "black"))
+
+p1 <- p1 + annotate("text", x = -Inf, y = Inf, label = "A", hjust = 1.5, vjust = 1, size = 4)
+p2 <- p2 + annotate("text", x = -Inf, y = Inf, label = "B", hjust = 1.5, vjust = 1, size = 4)
+p3 <- p3 + annotate("text", x = -Inf, y = Inf, label = "C", hjust = 1.5, vjust = 1, size = 4)
+p4 <- p4 + annotate("text", x = -Inf, y = Inf, label = "D", hjust = 1.5, vjust = 1, size = 4)
+
+plot_grid(
+  plot_grid(p1, p2, p3, p4, ncol = 2, align = "hv"),
+  ggdraw() + draw_label("Common X-Axis Title", size = 12),
+  ncol = 1,
+  rel_heights = c(0.95, 0.05)  # Adjust these values to control spacing
+)
+```
+
+### Parameter sensitivity
+
+```{r fig-armata-sensitivity-plot}
+#| eval: true
+#| fig-width: 6
+#| fig-height: 4.5
+#| fig-cap: |
+#|   Sensitivity of total N removed to changes in _Asparagopsis armata_ model parameters. Colours show the different culture depths of 0.5 m (orange), 2.5 m (blue) and 5.0 m (grey) below the surface. Error bars show variability (SD) across the 12 months of a typical year in each state. 
+
+sens_arma <- file.path(spec_data, "sensitivity_arma_calc_combTU.parquet") %>% 
+  read_parquet() #%>% 
+  # dplyr::filter(!param %in% c("M_am", "C_am", "M_ot", "C_ot"))
+exlude <- unique(sens_arma$param[abs(sens_arma$sens) < 0.01]) %>% as.character
+sens_arma <- sens_arma %>% 
+  dplyr::filter(!param %in% c(exlude, "M_am", "C_am", "M_ot", "C_ot"))
+sens_arma$param <- droplevels(sens_arma$param)
+
+levels(sens_arma$param)
+exlude
+
+# Add axis labels
+param.labs <- c(
+  bquote("V"["Am"]),
+  bquote("K"["Am"]),
+  # bquote("M"["Ni"]),
+  bquote("C"["Ni"]),
+  bquote("Q"["min"]),
+  bquote("Q"["max"]),
+  # bquote("K"["c"]),
+  bquote(mu),
+  bquote("D"["ve"]),
+  # bquote("a"["cs"]),
+  # bquote("I"["o"]),
+  bquote("T"["opt"]),
+  bquote("T"["min"]),
+  bquote("T"["max"])
+  # bquote("S"["opt"]),
+  # bquote("S"["min"]),
+  # bquote("S"["max"]),
+  # bquote("h"["a"]),
+  # bquote("h"["b"]),
+  # bquote("h"["c"]),
+  # bquote("h"["max"]),
+  # "DW:WW"
+)
+
+ggplot(dplyr::filter(sens_arma, !is.na(sens)), 
+       aes(x = rev(param), y = sens, fill = as.factor(cult_dep), ymin = sens-sd, ymax = sens+sd), 
+       alpha = 0.75) +
+  geom_col(position = position_dodge(), colour = "black") +
+  geom_errorbar(position = position_dodge()) +
+  coord_flip() +
+  scale_y_continuous(limits = c(-1.1, 1.1), breaks = seq(-1.5, 1.5, 0.2)) +
+  scale_x_discrete(limits = levels(sens_arma$param), labels = rev(param.labs)) +
+  scale_fill_manual(values = rev(depths_pal)) +
+  labs(y = "Total N sensitivity", x = "Parameter name") +
+  prettyplot + 
+  theme(legend.position = "none", aspect.ratio = 0.75, 
+        text = element_text(family = "sans", size = 12, colour = "black"))
+```
+
+```{r fig-taxiformis-sensitivity-plot}
+#| eval: true
+#| fig-width: 6
+#| fig-height: 4.5
+#| fig-cap: |
+#|   Sensitivity of total N removed to changes in _Asparagopsis taxiformis_ model parameters. Colours show the different culture depths of 0.5 m (orange), 2.5 m (blue) and 5.0 m (grey) below the surface. Error bars show variability across the 12 months of a typical year in each state. 
+
+sens_taxi <- file.path(spec_data, "sensitivity_taxi_calc_combTU.parquet") %>% 
+  read_parquet()
+exlude <- unique(sens_taxi$param[abs(sens_taxi$sens) < 0.01]) %>% as.character
+sens_taxi <- sens_taxi %>% 
+  dplyr::filter(!param %in% c(exlude, "M_am", "C_am", "M_ot", "C_ot"))
+sens_taxi$param <- droplevels(sens_taxi$param)
+
+levels(sens_taxi$param)
+exlude
+
+# Add axis labels
+param.labs <- c(
+  bquote("V"["Am"]),
+  bquote("K"["Am"]),
+  # bquote("M"["Ni"]),
+  bquote("C"["Ni"]),
+  bquote("Q"["min"]),
+  bquote("Q"["max"]),
+  bquote("K"["c"]),
+  bquote(mu),
+  bquote("D"["ve"]),
+  # bquote("a"["cs"]),
+  # bquote("I"["o"]),
+  bquote("T"["opt"]),
+  bquote("T"["min"]),
+  bquote("T"["max"])
+  # bquote("S"["opt"]),
+  # bquote("S"["min"]),
+  # bquote("S"["max"]),
+  # bquote("h"["a"]),
+  # bquote("h"["b"]),
+  # bquote("h"["c"]),
+  # bquote("h"["max"]),
+  # "DW:WW"
+)
+
+ggplot(dplyr::filter(sens_taxi, !is.na(sens)), 
+       aes(x = rev(param), y = sens, fill = as.factor(cult_dep), ymin = sens-sd, ymax = sens+sd), 
+       alpha = 0.75) +
+  geom_col(position = position_dodge(), colour = "black") +
+  geom_errorbar(position = position_dodge()) +
+  coord_flip() +
+  scale_y_continuous(limits = c(-1.1, 1.1), breaks = seq(-1.5, 1.5, 0.2)) +
+  scale_x_discrete(limits = levels(sens_arma$param), labels = rev(param.labs)) +
+  scale_fill_manual(values = rev(depths_pal)) +
+  labs(y = "Total N sensitivity", x = "Parameter name") +
+  prettyplot + 
+  theme(legend.position = "none", aspect.ratio = 0.75, 
+        text = element_text(family = "sans", size = 12, colour = "black"))
+```
+
+## Growth and bioremediation
+### Temperature limitation
+
+```{r Tlim-data}
+#| eval: true
+
+Tlim_cell <- list(
+  # file.path(runs_data, "Ilim_cell_PL_NTE.parquet") %>% arrow::read_parquet(),
+  # file.path(runs_data, "Ilim_cell_PL_TAS.parquet") %>% arrow::read_parquet(),
+  # file.path(runs_data, "Ilim_cell_PL_VIC.parquet") %>% arrow::read_parquet(),
+  # file.path(runs_data, "Ilim_cell_PL_QLD.parquet") %>% arrow::read_parquet(),
+  # file.path(runs_data, "Ilim_cell_PL_SAU.parquet") %>% arrow::read_parquet(),
+  # file.path(runs_data, "Ilim_cell_PL_WAS.parquet") %>% arrow::read_parquet(),
+  # file.path(runs_data, "Ilim_cell_PL_WAN.parquet") %>% arrow::read_parquet(),
+  file.path(runs_data, "Tlim_cell_PL_NSW.parquet") %>% arrow::read_parquet()
+) %>% 
+  bind_rows() %>% 
+  merge(cell_coords, by = c("state", "cell_no")) %>% 
+  mutate(consec_0.75 = NA,
+         consec_0.50 = NA)
+
+Tlim_cell_max <- Tlim_cell %>% 
+  group_by(state, cell_no, latitude, longitude, species) %>% 
+  reframe(total_days = n()) %>% 
+  mutate(consec_0.75 = NA,
+         consec_0.50 = NA)
+```
+
+```{r Tlim consecutive}
+#| eval: true
+
+cells <- unique(Tlim_cell$cell_no)
+
+for (c in seq_along(cells)) {
+  for (spec in levels(Tlim_cell$species)) {
+    df <- Tlim_cell[Tlim_cell$cell_no == cells[c] & Tlim_cell$species == spec, ]
+    df$consec_0.75[1] <- ifelse(df$T_lim[1] >= 0.75, 1, 0)
+    df$consec_0.50[1]  <- ifelse(df$T_lim[1] >= 0.50, 1, 0)
+    for (r in 2:nrow(df)) {
+      df$consec_0.75[r] <- ifelse(df$T_lim[r] >= 0.75, df$consec_0.75[r-1]+1, 0)
+      df$consec_0.50[r] <- ifelse(df$T_lim[r] >= 0.50, df$consec_0.50[r-1]+1, 0)
+    }
+    Tlim_cell$consec_0.75[Tlim_cell$cell_no == cells[c] & Tlim_cell$species == spec] <- df$consec_0.75
+    Tlim_cell$consec_0.50[Tlim_cell$cell_no == cells[c] & Tlim_cell$species == spec] <- df$consec_0.50
+    Tlim_cell_max$consec_0.75[Tlim_cell_max$cell_no == cells[c] & Tlim_cell_max$species == spec] <- max(df$consec_0.75)
+    Tlim_cell_max$consec_0.50[Tlim_cell_max$cell_no == cells[c] & Tlim_cell_max$species == spec] <- max(df$consec_0.50)
+  }
+}
+```
+
+
+By contrast, South Australia and southern Western Australia showed weak seasonal variation in temperature limitation but much higher spatial variation. The only area that appeared to have ideal temperature conditions for *A. armata* growth year-round was the area between Esperance and Albany in southern Western Australia (Figure 20). 
+
+Figure 20: The maximum number of days where Tlim $\geq$ 0.75 for *A. armata* in a typical year.
+
+Figure 21: Limitation of relative growth by temperature for *A. armata* across all cells in a typical year (mean $\pm$ SD). 
+
+Within the model, the only difference between the two *Asparagopsis* species was their temperature response. Despite its higher temperature tolerance (see Figure 16) *A. taxiformis* seemed overall more limited by temperature than *A. armata* across Australia (Figure 23). The tropical species was mostly unable to grow below 33˚S on the west coast and 35˚S, and there was only a very small area off the central coast of Western Australia just outside of Shark Bay where temperature conditions were ideal for *A. taxiformis* year-round. 
+
+Figure 22: The maximum number of days where Tlim $\geq$ 0.75 for *A. taxiformis* in a typical year.
+
+Figure 23: Limitation of relative growth by temperature for *A. taxiformis* across all cells in a typical year (mean $\pm$ SD).
+
+### Light limitation
+
+```{r Tlim-data}
+#| eval: true
+
+Tlim_cell <- list(
+  # file.path(runs_data, "Ilim_cell_PL_NTE.parquet") %>% arrow::read_parquet(),
+  # file.path(runs_data, "Ilim_cell_PL_TAS.parquet") %>% arrow::read_parquet(),
+  # file.path(runs_data, "Ilim_cell_PL_VIC.parquet") %>% arrow::read_parquet(),
+  # file.path(runs_data, "Ilim_cell_PL_QLD.parquet") %>% arrow::read_parquet(),
+  # file.path(runs_data, "Ilim_cell_PL_SAU.parquet") %>% arrow::read_parquet(),
+  # file.path(runs_data, "Ilim_cell_PL_WAS.parquet") %>% arrow::read_parquet(),
+  # file.path(runs_data, "Ilim_cell_PL_WAN.parquet") %>% arrow::read_parquet(),
+  file.path(runs_data, "Ilim_cell_PL_NSW.parquet") %>% arrow::read_parquet()
+) %>% 
+  bind_rows()
+```
+
+
+Figure 28: The maximum number of days where Ilim $\geq$ 0.75 for *Asparagopsis* spp. in a typical year.
+
+Figure 29: Limitation of relative growth by changes in seasonal light availability for *Asparagopsis* spp. across all cells grown at 0.5 m depth in a typical year (mean $\pm$ SD).
+
+### Total growth and bioremediation
+
+After running the model in all cells, there were 1034 cells (of 11677) where the run failed due to missing environmental data or the cell being too shallow to accommodate the 5.5 m canopy. Overall, nitrogen removal by *A. armata* and *A. taxiformis* was less than other species. 
+
+Nitrogen removal by *A. armata* was fairly consistent across a typical year in Tasmania with a mean of 204.0 g m-2 of farmed area, Victoria with a mean of 256.0 g m-2 of farmed area, and South Australia with a mean of 327.0 g m-2 of farmed area (Figure 34). The highest total removal across the year was also in South Australia. Nitrogen removal was most temporally variable in New South Wales, ranging from 8.5 g m-2 of farmed area to 540.0 g m-2 of farmed area, peaking when the simulated macroalgae was out-planted in August.
+
+Figure 34: Total nitrogen removed (mean $\pm$ SD) by *A. armata* planted in different months across all cell in each state.
+ 
+Nitrogen removal in South Australia was relatively spatially consistent, while the east coast of Australia showed greater variability (Figure 35). Some areas of Victoria on the borders of New South Wales and South Australia showed nitrogen removal comparable to the neighbouring state, likely reflecting the influence of data from the different reference stations. The potential “hotspot” area between Esperance and Albany in southern Western Australia, identified in temperature limitation maps above (see Figure 20), did not show higher nitrogen removal rates than the rest of the state. Similarly, Tasmania showed moderate nitrogen removal rates year-round (), despite the species being relatively limited by temperature from May to November (see Figure 21).
+
+Figure 35: Southern half of Australia showing the total nitrogen removed by *A. armata* planted in March (top) or August (bottom).
+
+Nitrogen removal by *A. taxiformis* was highest in New South Wales, with a mean nitrogen removal rate of 304 g m-2 of farmed area in each month of outplanting (Figure 36). Nitrogen removal was less consistent across the year in South Australia (peaking at a mean of 158 g m-2 of farmed area in February), northern Western Australia (peaking at 143 g m-2 of farm in June) and the Northern Territory (peaking at 142 g m-2 of farmed area in June).
+
+Figure 36: Total nitrogen removed (mean $\pm$ SD) by *A. taxiformis* planted in different months across all cell in each state. 
+
+Total nitrogen removal by *A. taxiformis* was relatively spatially consistent in most states except for Queensland, where the southern coast showed higher removal rates (Figure 37). This was likely driven by ambient nitrogen data, particularly the differences between reference stations (Figures 8 and 9). By contrast, the spatial variability seen in the north-west of the country (Figure 37) is more likely driven by temperature and light variability, given that there are fewer reference stations and outfall points (Figure 6).
+
+Figure 37: Total nitrogen removed by *A. taxiformis* planted in May in the Northern Territory and northern Western Australia (top), and in October in New South Wales and Queensland (bottom).
+
+## Growth scenarios
+
+When compared with the base scenario, all species were able to remove the most nitrogen in the fish farm scenario, almost certainly because of the increase in ammonium concentration from (very low) background levels (Figure 42). *Asparagopsis armata* and *A. taxiformis* consistently removed more nitrogen in the fish farm scenario.
+
+Differences in nitrogen removed by *Asparagopsis* were minimal in the estuary mouth scenario across all states (ranging from -2.1% to +2.5% of base). Similarly, in the shallow bay scenario, *Asparagopsis* was able to remove from 0.4 to 9.5$\times$ more nitrogen. The deep water scenario showed mostly negative but relatively small changes from the base removal, with changes ranging from -36% removal by *A. taxiformis* in New South Wales to +16.2% removed by *A. armata* in northern Western Australia. 
+
+Figure 42: Nitrogen removal for different scenarios compared to the base scenario. Colours show the different scenarios as fish farm (purple), deep water (green), estuary mouth (orange) and shallow bay (pink).
+
+# Discussion {#sec-discussion}
+
+This study demonstrates that seaweed aquaculture has significant bioremediation potential across Australia, with scenario modelling suggesting that *Asparagopsis* species can be effective at removing excess nitrogen from the environment. Across a range of conditions, these species showed nitrogen uptake potential that varied by region and season. Our model tested different pollution contexts, including marine aquaculture waste and estuarine runoff, highlighting the ability of seaweed cultivation to mitigate nutrient pollution.
+
+Our analysis highlighted variability in bioremediation potential among different macroalgae species under varying environmental conditions across Australia. The local availability of nitrogen, specifically ammonium and nitrate, emerged as the primary driver of this variability. Nitrate, generally in very low concentrations, is the predominant form of nitrogen in Australian coastal waters, which can be considered as oligotrophic (e.g. Chen et al., 2020; Pritchard et al., 2001; Twomey et al., 2007; Wild-Allen et al., 2010). This poses a clear challenge for the use of macroalgae for bioremediation in Australia. While all species studied showed higher uptake efficiency of ammonium, the low ambient levels of this compound limit their overall nitrogen uptake. Anthropogenic nutrient inputs, such as those from fish farms and sewage treatment outfalls, can create high nitrogen environments conducive to effective macroalgae cultivation and therefore bioremediation. The highest mean concentration of nitrate reported here from available data was 3.9 µM, and the fish farm scenario almost doubled this value (7.4 µM). While this is expected within Australian waters, it is still very low in a global context. For example, in Chile, mean coastal nitrate concentrations near salmon farms range from 3.2 µM in summer to 22.1 µM in winter (Varela et al., 2018). 
+
+All species studied here demonstrated a preference for ammonium uptake over nitrate, with *Asparagopsis armata* and *A. taxiformis* showing the highest uptake efficiency of ammonium. However, in the context of bioremediation, a species’ ability to take advantage of surges in nutrient concentrations is perhaps more important than its absolute uptake rate. By contrast, *Asparagopsis*, has a constant nitrate uptake rate which was minimally impacted by changes in nitrate concentrations. It is worth nothing that minimal seasonal variation in nutrient concentration was included in the present study. However, seasonal trends in ammonium and nitrate concentrations are often observed in coastal waters due to natural process (e.g. phytoplankton growth) and anthropogenic inputs (e.g. urban runoff from rainfall events).
+
+Temperature played a secondary role in influencing nitrogen uptake efficiency, generally reflecting the natural geographic ranges of the species. *Asparagopsis armata* showed the potential for year-round growth (indicating year-round nitrogen uptake) in cooler regions of Australia, reflecting its temperate to subtropical range and wide temperature tolerance. *Asparagopsis taxiformis* showed more restricted temperature ranges, limiting their bioremediation potential to specific regions and seasons. 
+
+Light-related parameters did not appear to significantly influence the nitrogen uptake of any macroalgae species, possibly driven by the low resolution in the available light attenuation data. Given the similar light responses among species and the consistent surface irradiance among all regions, all species were only modelled as growing at a depth of 0.5 m and in uniformly clear water. This uniformity in light response and growth depth simplified the model, ensuring that light availability did not confound the results. There is, however, a clear need for accurate site-specific light attenuation data to assess the impact of depth on macroalgae growth, as light is crucial for photosynthesis and growth. Smart et al (2022) used a laboratory setting to examine the nitrogen uptake kinetics of four kelp species under different ammonium concentrations. The nitrogen uptake rate of all species varied seasonally, increasing with higher temperatures and light availability.
+
+*Asparagopsis* species are currently the most commercially valuable for cultivation than the other species studied here due to their use in reducing methane emissions from livestock. However, modelling revealed that, despite the high nitrogen tissue content of *Asparagopsis* spp., these species are significantly less efficient in nitrogen uptake. This inefficiency is likely due to their lower rates of nitrate uptake compared to the other species combined with Australia’s low nitrate waters, their high nitrogen tissue requirements, and their more narrow temperature tolerance. These assumptions, however, are largely based on research conducted in regions outside Australia (e.g. Torres et al., 2021; Zanolla et al., 2019). More Australian local-scale studies are necessary to better understand the nitrogen uptake kinetics of *Asparagopsis* spp. in Australian coastal waters. 
+
+The study’s methodology, which integrated reference station and outfall data, provided a broad overview of spatial and temporal variation in nutrient concentrations in Australian coastal waters, However, the actual impact of outfalls and other nutrient sources on nitrogen concentration is more complex and site-specific, often stratified by depth and influenced by local hydrodynamic conditions (Pritchard et al., 2001). This suggests that detailed knowledge of ammonium and nitrate concentrations at specific sites, along with species-specific uptake kinetics, is crucial for accurately assessing the bioremediation potential of macroalgae in different coastal environments. Furthermore, individual site conditions could provide valuable insights for growers on the suitability of particular species for cultivation. For example, while the present model captured some thalli degradation due to high water velocities, it did not include breakage off the lines due to high swells or storm events, which would have a greater impact on more fragile seaweeds like *Asparagopsis* spp.
+
+Given *Asparagopsis* is the only genus studied here that currently has significant commercial value, future research should focus on identifying ‘hotspots’, considering temperature thresholds, time of year and placement, where *Asparagopsis* can thrive. Additionally, understanding the nitrogen uptake rate of the *Asparagopsis* gametophyte life stage, rather than assuming it is identical to the tetrasporophyte life stage, is essential for advancing open-water *Asparagopsis* culture for bioremediation. 
+
+Overall, this study provides valuable insights into the bioremediation potential of native Australian macroalgae species, highlighting the importance of nitrogen availability and temperature in shaping their effectiveness. The findings highlight the need for species selection and consideration of site-specific conditions when integrating seaweed aquaculture for bioremediation in Australian waters. As the industry explores seaweed farming's role in coastal management, future research should focus on refining spatial models, incorporating finer-scale environmental data, and evaluating economic feasibility. With the right approach, seaweed farming could reduce water pollution, support sustainable aquaculture, and enhance coastal ecosystem health. This study lays the groundwork for guiding site selection and key considerations in expanding seaweed farming across Australia.
+
+# Acknowledgments
+
+The project authors would like to thank Jens Knauer and Margie Rule of the \acr{ASSA} for their input and expertise on *Asparagopsis** husbandry, and Professor Rocky de Nys for his feedback on study methodology. Data for this study were sourced from Australia’s \acr{IMOS}, which is enabled by the \acr{NCRIS}. Data were also sourced from the \acr{NOD}. Work for \acr{NOD} is undertaken for the Marine and Coastal Hub, a collaborative partnership supported through funding from the Australian Government's \acr{NESP}.
+
+# References

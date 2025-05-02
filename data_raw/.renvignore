@@ -1,3 +1,7 @@
 # For big data files
-
-*/cell_vals/*
+AusBathyTopo 2024/bathy_projected.tif
+BARRA-C2/BARRA_C2_rsdsdir_data.tif
+BARRA-C2/BARRA_C2_ts_data.tif
+BRAN2023/BRAN_salt_data.tif
+BRAN2023/BRAN_u_data.tif
+BRAN2023/BRAN_v_data.tif
