@@ -20,6 +20,7 @@ format:
       gutter-width: 2em
 
 execute:
+  eval: false
   echo: true
   warning: false
   fig-align: center
