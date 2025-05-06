@@ -94,17 +94,9 @@ library(gitcreds)
 library(magrittr)
 
 targets::tar_renv(
-  extras = c(
-    "bslib", "crew", "gt", "markdown", "rstudioapi", "shiny", "shinybusy", "shinyWidgets", "visNetwork", "qs",
-    "qs2", "stormeyseas/macrogrow", "DOI-USGS/streamMetabolizer", "markwh/subsetnc"
-  ),
-  path = file.path("renv", "packages_spatial_cells.R"),
-  script = file.path("R_scripts", "08_spatial_cells.R")
-)
-
-targets::tar_renv(
+  extras = c("bslib", "crew", "gt", "markdown", "rstudioapi", "shiny", "shinybusy", "shinyWidgets", "visNetwork", "qs", "qs2"),
   path = file.path("renv", "packages_model_running.R"),
-  script = file.path("R_scripts", "12_model_running.R")
+  script = file.path("R_scripts", "09_model_running.R")
 )
 
 targets::tar_renv(
@@ -112,20 +104,10 @@ targets::tar_renv(
   script = file.path("R_scripts", "02_species.R")
 )
 
-targets::tar_renv(
-  path = file.path("renv", "packages_model_running.R"),
-  script = file.path("R_scripts", "12_model_running.R")
-)
-
-targets::tar_renv(
-  path = file.path("renv", "packages_theo_scens.R"),
-  script = file.path("R_scripts", "12.5_theo_scens.R")
-)
-
 packs <- renv::dependencies()$Package %>% unique()
 renv::install(
-  packages = c(packs, "DOI-USGS/streamMetabolizer", "stormeyseas/macrogrow", "markwh/subsetnc", "appling/unitted"),
-  exclude = c("streamMetabolizer", "macrogrow", "subsetnc", "unitted"),
+  packages = c(packs, "stormeyseas/macrogrow", "DOI-USGS/streamMetabolizer", "markwh/subsetnc", "ropensci/geotargets"),
+  exclude = c("macrogrow", "streamMetabolizer", "subsetnc", "geotargets"),
   dependencies = T
 )
 renv::snapshot()
