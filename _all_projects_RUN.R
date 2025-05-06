@@ -45,7 +45,7 @@ data_path <- file.path("D:", "FRDC-Seaweed-Raw-Data", "AusBathyTopo 2024")
 source("R_scripts/08_extract-AusBathyTopo-data.R")
 
 ## Targets cell data ----------------------------------------------------------------------------------------------
-projects <- proj <- tibble::tribble(
+projects <- tibble::tribble(
   ~state, ~sc, ~st, ~upd,
   "QLD",  "R_scripts/07.3_model_running_QLD.R", "targets_outputs/_model_running_QLD", NA, 
   "TAS",  "R_scripts/07.1_model_running_TAS.R", "targets_outputs/_model_running_TAS", NA, 
@@ -57,34 +57,47 @@ projects <- proj <- tibble::tribble(
   "NTE",  "R_scripts/07.7_model_running_NTE.R", "targets_outputs/_model_running_NTE", NA
 )
 sc <- "R_scripts/09_model_running.R"
-proj <- proj %>% dplyr::filter(is.na(upd))
-for (i in 1:nrow(proj)) {
-  proj$state[i] %>% qsave("targets_outputs/this_state.qs")
+
+### Prune ---------------------------------------------------------------------------------------------------------
+for (i in 1:nrow(projects)) {
+  projects$state[i] %>% qsave("targets_outputs/this_state.qs")
+  try({
+    tar_prune(script = sc, store = projects$st[i])
+    projects$upd[i] <- 1
+  })
+}
+
+### Ilim only -----------------------------------------------------------------------------------------------------
+# Targets needed for 10_processing_Ilim_data.R
+# Uncomment slice_sample(n = 2250) line in BARRA_C2_cell_nos
+projects <- projects %>% dplyr::filter(is.na(upd))
+for (i in 1:nrow(projects)) {
+  projects$state[i] %>% qsave("targets_outputs/this_state.qs")
   try({
     tar_make(
-      # Targets needed for 10_processing_Ilim_data.R
-      # Uncomment slice_sample(n = 2250) line in BARRA_C2_cell_nos
-      names = "Ilim_cell_PL", 
-      seconds_meta_append = 90, shortcut = F, script = sc, store = proj$st[i]
+      names = "Ilim_cell_PL", #shortcut = T, 
+      seconds_meta_append = 90, script = sc, store = projects$st[i]
       )
-    proj$upd[i] <- 1
+    projects$upd[i] <- 1
     })
 }
 source("R_scripts/10_processing_Ilim_data.R") # I_lim depth testing
 
+### All other targets ---------------------------------------------------------------------------------------------
+# Comment out the slice_sample(n = 2250) line in BARRA_C2_cell_nos
+# DO NOT run Ilim_cell_PL - maybe comment that out too
 
 tar_workspace(total_cell_growth_234a709e9f8ad1f0, store = "targets_outputs/_model_running_QLD")
-proj <- projects %>% dplyr::filter(is.na(upd))
-for (i in 1:nrow(proj)) {
-  proj$state[i] %>% qsave("targets_outputs/this_state.qs")
+
+projects <- projects %>% dplyr::filter(is.na(upd))
+for (i in 1:nrow(projects)) {
+  projects$state[i] %>% qsave("targets_outputs/this_state.qs")
   try({
     tar_make(
-      # Comment out the slice_sample(n = 2250) line in BARRA_C2_cell_nos
-      # DO NOT run Ilim_cell_PL - maybe comment that out too
       names = c("total_cell_growth", "growth_lims", "theo_scens", "theo_site_params"),
-      seconds_meta_append = 90, shortcut = F, script = sc, store = proj$st[i]
+      seconds_meta_append = 90, shortcut = F, script = sc, store = projects$st[i]
     )
-    proj$upd[i] <- 1
+    projects$upd[i] <- 1
   })
 }
 source("R_scripts/11_processing_model_running.R")

@@ -465,24 +465,29 @@ list(
   tar_target(d_top_PL, (c(0.5, 1, 1.5, 2, 2.5, 3))),
   tar_target(
     Ilim_cell_PL,
-    data.frame(
-      t = 1:length(date_range_PL),
-      yday = lubridate::yday(date_range_PL),
-      irradiance = cell_input_timeseries$I_input[yday_range_PL],
-      I_lim = sapply(
-        X = cell_input_timeseries$I_input[yday_range_PL],
-        FUN = I_lim,
-        Nf = unlist(init_state[[1]]["Nf"]),
-        kW = cell_input_timeseries$Kd_490[yday_range_PL],
-        spec_params = unlist(species_data[[1]]),
-        site_params = c(d_top = d_top_PL)
+    command = {
+      df <- data.frame(
+        t = 1:length(date_range_PL),
+        yday = lubridate::yday(date_range_PL),
+        irradiance = cell_input_timeseries$I_input[yday_range_PL],
+        kW = cell_input_timeseries$Kd_490[yday_range_PL]
       )
-    ) %>%
-      mutate(
-        state = this_state,
-        cell_no = BARRA_C2_cell_nos,
-        depth = d_top_PL,
-      ),
+      df$I_lim <- sapply(
+          X = df$irradiance,
+          FUN = I_lim,
+          Nf = unlist(init_state[[1]]["Nf"]) %>% unname(),
+          kW = df$kW,
+          spec_params = unlist(species_data[[1]]),
+          site_params = c(d_top = d_top_PL)
+        ) %>% 
+        diag()
+      df %>%
+        mutate(
+          state = factor(this_state, levels = states),
+          cell_no = BARRA_C2_cell_nos,
+          depth = d_top_PL,
+        )
+    },
     pattern = cross(d_top_PL, map(BARRA_C2_cell_nos, cell_input_timeseries))
   ),
   # tar_target(

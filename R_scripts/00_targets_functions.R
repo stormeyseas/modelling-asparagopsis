@@ -50,51 +50,6 @@ define_coastline <- function(coast_data) {
   return(coast_data)
 }
 
-do_grow_macroalgae <- function(start, grow_days, temperature, salinity, light, velocity, nitrate, ammonium, ni_uptake, am_uptake, site_params, spec_params, initials) {
-  name_cols <- c("Nf", "Ns", "growth_rate", "Ns_to_Nf", "Ns_loss", "Nf_loss", "Q_int", "Q_rel", "Q_lim", "B_dw.mg", "B_ww.mg", "hm", "conc_nitrate", "up_Ni", "conc_ammonium", "up_Am", "up_Ot", "T_lim", "S_lim", "I_top", "I_lim", "u_c")
-
-  # if (any(is.na(temperature))) {
-  #   df <- cbind(data.frame(date = start), 
-  #               as.data.frame(matrix(NA, nrow = 1, ncol = 22)),
-  #               data.frame(note = "Error in temperature vector"))
-  # } else if (any(is.na(light))) {
-  #   df <- cbind(data.frame(date = start), 
-  #               as.data.frame(matrix(NA, nrow = 1, ncol = 22)),
-  #               data.frame(note = "Error in light vector"))
-  # } else 
-  if (site_params['hz'] <= (site_params['d_top'] + site_params['hc'])) {
-    df <- cbind(date = start, matrix(NA, nrow = 1, ncol = 22, dimnames = list(NULL, name_cols)))
-  } else {
-    df <- #tryCatch(
-    #   expr = {
-        grow_macroalgae(
-          start = start, 
-          grow_days = grow_days,
-          temperature = temperature, 
-          salinity = salinity, 
-          light = light, 
-          velocity = velocity,
-          nitrate = nitrate, 
-          ammonium = ammonium, 
-          ni_uptake = ni_uptake, 
-          am_uptake = am_uptake,
-          site_params = site_params, 
-          spec_params = spec_params, 
-          initials = initials
-        )
-      #   }, 
-      # warning = function(w){
-      #   df <- cbind(date = start, matrix(NA, nrow = 1, ncol = 22, dimnames = list(NULL, name_cols)))
-      # }, 
-      # error = function(e){
-      #   df <- cbind(date = start, matrix(NA, nrow = 1, ncol = 22, dimnames = list(NULL, name_cols)))
-      # }
-    # )
-  }
-  # colnames(df) <- name_cols
-  return(df)
-}
-
 positive_end <- function(df) {
   df <- df %>% 
     filter(output %in% c("Nf", "Ns")) %>% 
@@ -112,26 +67,6 @@ get_total_N_long <- function(df) {
   df <- dplyr::reframe(df, total_N = sum(value, na.rm = F))
   return(df)
 }
-
-# make_long_base <- function(df, keep_cols, state_levs, species_levs, depth_levs, param_levs, factor_levs) {
-#   df$cell_ID <- NULL
-#   if (sum(df$growth_rate) == 0) {
-#     df <- as.data.frame(matrix(data = NA, nrow = 0, ncol = 8))
-#     colnames(df) <- c("date", "state", "species", "cult_dep", "param", "factor", "measure", "value")
-#   } else {
-#     cols <- setdiff(colnames(df), keep_cols)
-#     df <- tidyr::pivot_longer(df, names_to = "measure", values_to = "value", cols = all_of(cols))
-#   }
-#   df$date <- as.Date(df$date)
-#   df$state <- factor(df$state, levels = state_levs)
-#   df$species <- factor(df$species, levels = species_levs)
-#   df$cult_dep <- factor(df$cult_dep, levels = depth_levs)
-#   df$param <- factor(df$param, levels = param_levs)
-#   df$factor <- factor(df$factor, levels = factor_levs)
-#   df$measure <- as.factor(df$measure)
-#   df$value <- as.numeric(df$value)
-#   return(df)
-# }
 
 map_cells <- function(cell_df, data_df, try_dist) {
   # Distance of the data cell to every map cell centre
@@ -202,104 +137,6 @@ consecutive <- function(df, measure, threshold) {
   }
   return(df)
 }
-
-try_Slim <- function(date_range_partial_lims, S_input_cell_av, yday_range_partial_lims, species_data_3){
-  if (any(is.na(S_input_cell_av$value[yday_range_partial_lims]))) {
-    data.frame(
-      t = 1:length(date_range_partial_lims),
-      date = date_range_partial_lims,
-      salinity = S_input_cell_av$value[yday_range_partial_lims], 
-      S_lim = rep(NA, length(date_range_partial_lims))
-      )
-  } else {
-    data.frame(
-      t = 1:length(date_range_partial_lims),
-      date = date_range_partial_lims,
-      salinity = S_input_cell_av$value[yday_range_partial_lims], 
-      S_lim = sapply(
-        X = S_input_cell_av$value[yday_range_partial_lims], 
-        FUN = S_lim,
-        spec_params = unlist(species_data_3)
-      ))
-  }
-}
-
-try_loss <- function(date_range_partial_lims, UV_input_cell_av, yday_range_partial_lims, species_data_3){
-  if (any(is.na(UV_input_cell_av$value[yday_range_partial_lims]))) {
-    data.frame(
-      t = 1:length(date_range_partial_lims),
-      date = date_range_partial_lims,
-      UV_velocity = UV_input_cell_av$value[yday_range_partial_lims], 
-      loss = rep(NA, length(date_range_partial_lims))
-      )
-  } else {
-    data.frame(
-      t = 1:length(date_range_partial_lims),
-      date = date_range_partial_lims,
-      UV_velocity = UV_input_cell_av$value[yday_range_partial_lims], 
-      loss = sapply(
-        X = UV_input_cell_av$value[yday_range_partial_lims], 
-        FUN = loss,
-        turbulence = 0,
-        spec_params = unlist(species_data_3)
-      ))
-  }
-}
-
-try_Ni_uptake <- function(date_range_partial_lims, Ni_input, species_data_3, spec_ni_uptake_3){
-  if (any(is.na(Ni_input))) {
-    data.frame(
-      t = 1:length(date_range_partial_lims),
-      date = date_range_partial_lims,
-      conc = Ni_input, 
-      uptake = rep(NA, length(date_range_partial_lims))
-    )
-  } else {
-    data.frame(
-      t = 1:length(date_range_partial_lims),
-      date = date_range_partial_lims,
-      conc = Ni_input, 
-      uptake = sapply(
-        X = Ni_input, 
-        FUN = get_uptake,
-        uptake_shape = spec_ni_uptake_3,
-        Nform_abbr = "ni",
-        spec_params = unlist(species_data_3)
-      ))
-  }
-}
-
-try_Am_uptake <- function(date_range_partial_lims, Am_input_cell_av, yday_range_partial_lims, species_data_3, spec_am_uptake_3) {
-  if (any(is.na(Am_input_cell_av$value[yday_range_partial_lims]))) {
-    data.frame(
-      t = 1:length(date_range_partial_lims),
-      date = date_range_partial_lims,
-      conc = Am_input_cell_av$value[yday_range_partial_lims], 
-      uptake = rep(NA, length(date_range_partial_lims))
-    )
-  } else {
-    data.frame(
-      t = 1:length(date_range_partial_lims),
-      date = date_range_partial_lims,
-      conc = Am_input_cell_av$value[yday_range_partial_lims], 
-      uptake = sapply(
-        X = Am_input_cell_av$value[yday_range_partial_lims], 
-        FUN = get_uptake,
-        uptake_shape = spec_am_uptake_3,
-        Nform_abbr = "am",
-        spec_params = unlist(species_data_3)
-      ))
-  }
-}
-
-modify_theo_inputs <- function(input, start, time, mod){
-  if (any(is.na(input))) {
-    input
-  } else {
-    input * mod
-  }
-}
-
 
 # Function to fill NAs with weighted averages
 fill_nas_weighted <- function(x, window_size = 8, decay_factor = 0.65) {
