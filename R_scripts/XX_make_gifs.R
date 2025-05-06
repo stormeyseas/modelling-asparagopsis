@@ -8,35 +8,32 @@ library(ozmaps)
 library(arrow)
 library(targets)
 library(stringr)
+library(here)
 
-devtools::install_github("https://github.com/stormeyseas/macrogrow.git")
+runs_data <- here() %>% file.path("data", "processed-model-running")
+out_path <- here() %>% file.path("data", "gifs")
+if (!dir.exists(out_path)) {dir.create(out_path)}
 
-base_path <- file.path("C:", "Users", "treimer", "Documents", "R-temp-files", "FRDC-seaweed")
-cell_store <- file.path(base_path, "targets_outputs", "_spatial_cells")
-runs_data <- file.path(base_path, "data", "processed-model-running")
-out_path <- file.path(base_path, "data", "gifs")
+sc <- "R_scripts/09_model_running.R"
+projects <- tibble::tribble(
+  ~state, ~store, ~state_long,
+  "QLD",  "targets_outputs/_model_running_QLD", "Queensland", 
+  "TAS",  "targets_outputs/_model_running_TAS",  "Tasmania", 
+  "SAU",  "targets_outputs/_model_running_SAU",  "South Australia", 
+  "WAS",  "targets_outputs/_model_running_WAS",  "Western Australia (S)",
+  "NSW",  "targets_outputs/_model_running_NSW",  "New South Wales", 
+  "VIC",  "targets_outputs/_model_running_VIC",  "Victoria", 
+  "WAN",  "targets_outputs/_model_running_WAN",  "Western Australia (N)", 
+  "NTE",  "targets_outputs/_model_running_NTE", "Northern Territory"
+)
 
-bounds <- tar_read(bbox, store = cell_store)
+states_bbox <- tar_read(states_bbox, store = projects$st[1])
+states <- tar_read(states, store = projects$st[1])
 
-# bounds<- list(
-#   SAU = c(lonmin = 128.94, lonmax = 140.97, latmin = -39, latmax = -31), # All South Australia
-#   QLD = c(lonmin = 138.05, lonmax = 155, latmin = -28.20, latmax = -8), # All Queensland
-#   # WA = c(lonmin = 111, lonmax = 128.94, latmin = -36, latmax = -10), # All Western Australia
-#   WAS = c(lonmin = 111, lonmax = 128.94, latmin = -36, latmax = -25), # South Western Australia
-#   WAN = c(lonmin = 111, lonmax = 128.94, latmin = -25, latmax = -10), # North Western Australia
-#   TAS = c(lonmin = 143, lonmax = 149.4, latmin = -44.5, latmax = -39.4), # All Tasmania
-#   VIC = c(lonmin = 140.97, lonmax = 151, latmin = -39.4, latmax = -37.50), # All Victoria
-#   NSW = c(lonmin = 148, lonmax = 155, latmin = -37.50, latmax = -28.20), # All NSW
-#   NTE = c(lonmin = 128.94, lonmax = 138.05, latmin = -17, latmax = -10) # All Northern Territory
-# )
-# bounds[["AUS"]] <- c(lonmin = 110, lonmax = 157, latmin = -44.5, latmax = -10)
+remove_unit("molN")
+install_unit("molN", "14.0067 g")
 
-states_abbr_2 <- c("NTE", "QLD", "NSW", "SAU", "TAS", "VIC", "WAN", "WAS")
-states_long <- c("Northern Territory", "Queensland", "New South Wales", "South Australia", "Tasmania", "Victoria", "Western Australia (N)", "Western Australia (S)")
-
-remove_unit("mol")
-install_unit("mol", "14.0067 g")
-
+# I want to create gifs of the factors limiting growth in the model for each species and state.
 # Tlim ------------------------------------------------------------------------------------------------------
 T_clims <- c(0, 1)
 T_cbreaks <- seq(T_clims[1], T_clims[2], 0.2)
@@ -57,8 +54,8 @@ pgif <- ggplot(data = df, aes(x = lon, y = lat, fill = T_lim, frame = yday)) +
   scale_fill_viridis_c(guide = "colorbar", 
                        limits = T_clims, breaks = T_cbreaks, 
                        name = expression("Temperature limitation")) +
-  coord_sf(xlim = c(bounds[[st]]["lonmin"], bounds[[st]]["lonmax"]),
-           ylim = c(bounds[[st]]["latmin"], bounds[[st]]["latmax"])) +
+  coord_sf(xlim = c(states_bbox[[st]]["lonmin"], states_bbox[[st]]["lonmax"]),
+           ylim = c(states_bbox[[st]]["latmin"], states_bbox[[st]]["latmax"])) +
   scale_x_continuous(breaks = seq(100, 160, 2.5)) +
   scale_y_continuous(breaks = seq(-5, -45, -2.5)) +
   labs(x = "Longitude", y = "Latitude") +

@@ -64,7 +64,7 @@ list(
   
   ## Culture conditions -------------------------------------------------------------------------------------------
   tar_target(name = starts, command = seq(5, 365, 10)),
-  tar_target(name = culture_depths, command = c(0.5, 2.5, 5)),
+  tar_target(name = culture_depths, command = c(0.5, 2.5, 5, 10)),
   tar_target(name = factors, command = c(0.95, 1, 1.05)),
   tar_target(
     name = site_params_sens,
@@ -73,7 +73,7 @@ list(
       hc = 5,
       farmA = 50 * 50,
       hz = 50,
-      kW = Kd_from_Secchi(15),
+      kW = Secchi_to_Kd(20),
       turbulence = NA
     ),
     pattern = culture_depths,
@@ -127,13 +127,12 @@ list(
   
   tar_target(
     name = total_N_end_arma,
-    command = cbind(sensitivity_run_arma[,'date'], sensitivity_run_arma[,'Nf'] + sensitivity_run_arma[,'Ns']) %>% 
+    command = cbind(sensitivity_run_arma[,'t'], sensitivity_run_arma[,'Nf'] + sensitivity_run_arma[,'Ns']) %>% 
       as.data.frame() %>% 
       remove_rownames() %>% 
-      rename(date = V1, TN = V2) %>% 
-      filter(date == max(date)) %>% 
+      rename(t = V1, TN = V2) %>% 
+      filter(t == max(t)) %>% 
       mutate(
-        date = as.Date(date),
         species = "A. armata",
         cult_dep = culture_depths,
         param = param_names,
@@ -176,14 +175,13 @@ list(
 
   tar_target(
     name = total_N_end_taxi,
-    command = cbind(sensitivity_run_taxi[,'date'], sensitivity_run_taxi[,'Nf'] + sensitivity_run_taxi[,'Ns']) %>% 
+    command = cbind(sensitivity_run_taxi[,'t'], sensitivity_run_taxi[,'Nf'] + sensitivity_run_taxi[,'Ns']) %>% 
       as.data.frame() %>% 
       remove_rownames() %>% 
-      rename(date = V1, TN = V2) %>% 
-      filter(date == max(date)) %>% 
+      rename(t = V1, TN = V2) %>% 
+      filter(t == max(t)) %>% 
       mutate(
-        date = as.Date(date),
-        species = "A. taxiformis",
+        species = "A. armata",
         cult_dep = culture_depths,
         param = param_names,
         factor = factors,
