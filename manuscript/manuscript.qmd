@@ -22,7 +22,7 @@ format:
         
 execute:
   eval: false
-  cache: true
+  cache: false
   fig-height: 6
   fig-width: 4
   freeze: auto
@@ -58,6 +58,8 @@ library(tidyterra)
 library(here)
 library(lubridate)
 library(tidyr)
+library(conflicted)
+conflicts_prefer(dplyr::select, dplyr::filter)
 ```
 
 ```{r global variables and functions}
@@ -153,34 +155,21 @@ ggplot(cell_coords, aes(x = longitude, y = latitude, fill = state)) +
   theme(legend.position = "none")
 ```
 
-```{r bathymetry data}
-#| eval: true
-#| cache: true
-
-BathyTopo_NSW <- tar_read(cell_bathy, store = here() %>% file.path("targets_outputs", "_model_running_NSW"))
-# BathyTopo_TAS <- tar_read(cell_bathy, store = here() %>% file.path("targets_outputs", "_model_running_TAS"))
-# BathyTopo_VIC <- tar_read(cell_bathy, store = here() %>% file.path("targets_outputs", "_model_running_VIC"))
-# BathyTopo_NTE <- tar_read(cell_bathy, store = here() %>% file.path("targets_outputs", "_model_running_NTE"))
-# BathyTopo_QLD <- tar_read(cell_bathy, store = here() %>% file.path("targets_outputs", "_model_running_QLD"))
-# BathyTopo_SAU <- tar_read(cell_bathy, store = here() %>% file.path("targets_outputs", "_model_running_SAU"))
-# BathyTopo_WAN <- tar_read(cell_bathy, store = here() %>% file.path("targets_outputs", "_model_running_WAN"))
-# BathyTopo_WAS <- tar_read(cell_bathy, store = here() %>% file.path("targets_outputs", "_model_running_WAS"))
-```
-
 ## Environmental inputs {#sec-envinputs}
 
 ```{r all-cell-input-timeseries}
 #| eval: true
+#| cache: false
 
 cell_input_timeseries <- list(
   here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_TAS.parquet") %>% read_parquet(),
   here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_VIC.parquet") %>% read_parquet(),
-  here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_NSW.parquet") %>% read_parquet(),
   here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_NTE.parquet") %>% read_parquet(),
   here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_QLD.parquet") %>% read_parquet(),
   here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_SAU.parquet") %>% read_parquet(),
   here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_WAN.parquet") %>% read_parquet(),
-  here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_WAS.parquet") %>% read_parquet()
+  here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_WAS.parquet") %>% read_parquet(),
+  here() %>% file.path("data", "processed_cell_data", "cell_input_timeseries_NSW.parquet") %>% read_parquet()
   ) %>% 
   bind_rows() %>% 
   mutate(state = factor(state, levels = states_ord, labels = states_lng))
@@ -380,7 +369,26 @@ refstation_locations <- here() %>%
 outfall_locations <- here() %>% 
   file.path("data_raw", "national-outfall-database", "data-output", "outflow_site_locations.parquet") %>% 
   arrow::read_parquet() %>% 
-  mutate(state = factor(state, levels = states_ord)) %>% 
+  mutate(state = case_when(
+    lon > bounds[["SAU"]]["lonmin"] & lon <= bounds[["SAU"]]["lonmax"] & 
+      lat > bounds[["SAU"]]["latmin"] & lat <= bounds[["SAU"]]["latmax"]  ~ "SAU",
+    lon > bounds[["QLD"]]["lonmin"] & lon <= bounds[["QLD"]]["lonmax"] & 
+      lat > bounds[["QLD"]]["latmin"] & lat <= bounds[["QLD"]]["latmax"]  ~ "QLD",
+    lon > bounds[["WAS"]]["lonmin"] & lon <= bounds[["WAS"]]["lonmax"] & 
+      lat > bounds[["WAS"]]["latmin"] & lat <= bounds[["WAS"]]["latmax"]  ~ "WAS",
+    lon > bounds[["WAN"]]["lonmin"] & lon <= bounds[["WAN"]]["lonmax"] & 
+      lat > bounds[["WAN"]]["latmin"] & lat <= bounds[["WAN"]]["latmax"]  ~ "WAN",
+    lon > bounds[["VIC"]]["lonmin"] & lon <= bounds[["VIC"]]["lonmax"] & 
+      lat > bounds[["VIC"]]["latmin"] & lat <= bounds[["VIC"]]["latmax"]  ~ "VIC",
+    lon > bounds[["NSW"]]["lonmin"] & lon <= bounds[["NSW"]]["lonmax"] & 
+      lat > bounds[["NSW"]]["latmin"] & lat <= bounds[["NSW"]]["latmax"]  ~ "NSW",
+    lon > bounds[["NTE"]]["lonmin"] & lon <= bounds[["NTE"]]["lonmax"] & 
+      lat > bounds[["NTE"]]["latmin"] & lat <= bounds[["NTE"]]["latmax"]  ~ "NTE",
+    lon > bounds[["TAS"]]["lonmin"] & lon <= bounds[["TAS"]]["lonmax"] & 
+      lat > bounds[["TAS"]]["latmin"] & lat <= bounds[["TAS"]]["latmax"]  ~ "TAS",
+    TRUE ~ NA
+  ),
+  state = factor(state, levels = states_ord)) %>% 
   relocate(state, .before = name)
 
 N_locations <- rbind(
@@ -388,8 +396,6 @@ N_locations <- rbind(
   refstation_locations %>% mutate(type = "refstation")
 )
 ```
-
-Each cell was matched to its two nearest \acr{IMOS} reference stations, which were weighted by distance from the cell and together formed the nutrient baseline. Outfall points were matched to multiple cells within a 48 km radius and their influence was considered inversely proportional to the distance between the cell centre and the outfall. 
 
 ```{r fig-N-data-locations}
 #| eval: true
@@ -402,7 +408,7 @@ ggplot(N_locations, aes(x = longitude, y = latitude, color = state, shape = type
   coord_sf(xlim = c(bounds[["AUS"]]["lonmin"], bounds[["AUS"]]["lonmax"]),
            ylim = c(bounds[["AUS"]]["latmin"], bounds[["AUS"]]["latmax"])) +
   geom_point(size = 3.5) +
-  scale_shape_manual(values = c(20, 8)) +
+  scale_shape_manual(values = c(20, 13)) +
   # scale_colour_manual(values = states_pal, labels = states_lng, na.value = "black") +
   scale_color_brewer(palette = "Dark2") +
   scale_x_continuous(breaks = seq(100, 160, 5)) +
@@ -412,52 +418,50 @@ ggplot(N_locations, aes(x = longitude, y = latitude, color = state, shape = type
   theme(legend.position = "none")
 ```
 
-Data from the \acr{IMOS} reference stations at Bonney Coast, Esperance and Ningaloo were too sporadic to be useful and their datasets were very similar to their closest neighbour stations, so their data were excluded. This left stations at Darwin, Maria Island, North Stradbroke Island, Port Hacking, Rottnest Island and Yongala for the current analysis. 
-
 ```{r refstation-cell-matching}
 #| eval: true
 
+all_cells <- sum(totals$cells)
+
 refstation_cell_match <- list(
-  # file.path(cell_data, "refstation_cell_match_NTE.parquet") %>% arrow::read_parquet(),
-  # file.path(cell_data, "refstation_cell_match_TAS.parquet") %>% arrow::read_parquet(),
-  # file.path(cell_data, "refstation_cell_match_VIC.parquet") %>% arrow::read_parquet(),
-  # file.path(cell_data, "refstation_cell_match_QLD.parquet") %>% arrow::read_parquet(),
-  # file.path(cell_data, "refstation_cell_match_SAU.parquet") %>% arrow::read_parquet(),
-  # file.path(cell_data, "refstation_cell_match_WAN.parquet") %>% arrow::read_parquet(),
-  # file.path(cell_data, "refstation_cell_match_WAS.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "refstation_cell_match_NTE.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "refstation_cell_match_TAS.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "refstation_cell_match_VIC.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "refstation_cell_match_QLD.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "refstation_cell_match_SAU.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "refstation_cell_match_WAN.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "refstation_cell_match_WAS.parquet") %>% arrow::read_parquet(),
   file.path(cell_data, "refstation_cell_match_NSW.parquet") %>% arrow::read_parquet()
   ) %>% 
   bind_rows() %>% 
   group_by(StationName) %>% 
-  reframe(num_cells = n())
+  reframe(nc = n())
 ```
 
 Matching model cells to their two nearest reference stations resulted in 
-`r round(100*refstation_cell_match$num_cells[refstation_cell_match$StationName == "Darwin"]/sum(totals$cells), 2)`% cells using data from Darwin, 
-`r round(100*refstation_cell_match$num_cells[refstation_cell_match$StationName == "Kangaroo Island"]/sum(totals$cells), 2)`% from Kangaroo Island, 
-`r round(100*refstation_cell_match$num_cells[refstation_cell_match$StationName == "Maria Island"]/sum(totals$cells), 2)`% from Maria Island, 
-`r round(100*refstation_cell_match$num_cells[refstation_cell_match$StationName == "North Stradbroke Island"]/sum(totals$cells), 2)`% from North Stradbroke Island, 
-`r round(100*refstation_cell_match$num_cells[refstation_cell_match$StationName == "Port Hacking"]/sum(totals$cells), 2)`% from Port Hacking, 
-`r round(100*refstation_cell_match$num_cells[refstation_cell_match$StationName == "Rottnest Island"]/sum(totals$cells), 2)`% from Rottnest Island, and 
-`r round(100*refstation_cell_match$num_cells[refstation_cell_match$StationName == "Yongala"]/sum(totals$cells), 2)`% from Yongala.
-
-Outfall data from \acr{NOD} are only recorded as monthly observations of the water being added to coastal conditions, rather than ambient conditions in coastal waters. Data from outfall stations was only included if $\geq$ 20 observations were made within the past 10 years (2014-2023). If $\geq$ 20 observations were made from the period of 2019-2023, then the data were restricted to that period. One outfall station was fully excluded (Pardoe, in northern Tasmania) as the concentrations recorded were ~6 orders of magnitude higher than any other station and it was presumed that this was a data reporting error. While there is at least one outfall in each state, they are much more abundant in Victoria, Tasmania, New South Wales and Queensland. 
+`r round(100*refstation_cell_match$nc[refstation_cell_match$StationName == "Darwin"]/sum(totals$cells), 1)`% of cells using data from Darwin, 
+`r round(100*refstation_cell_match$nc[refstation_cell_match$StationName == "Kangaroo Island"]/sum(totals$cells), 1)`% using data from Kangaroo Island, 
+`r round(100*refstation_cell_match$nc[refstation_cell_match$StationName == "Maria Island"]/sum(totals$cells), 1)`% using data from Maria Island, 
+`r round(100*refstation_cell_match$nc[refstation_cell_match$StationName == "North Stradbroke Island"]/sum(totals$cells), 1)`% from North Stradbroke Island, 
+`r round(100*refstation_cell_match$nc[refstation_cell_match$StationName == "Port Hacking"]/sum(totals$cells), 1)`% using data from Port Hacking, 
+`r round(100*refstation_cell_match$nc[refstation_cell_match$StationName == "Rottnest Island"]/sum(totals$cells), 1)`% using data from Rottnest Island, and 
+`r round(100*refstation_cell_match$nc[refstation_cell_match$StationName == "Yongala"]/sum(totals$cells), 1)`% using data from Yongala. 
 
 ```{r outfall-cell-matching}
 #| eval: true
 
 outfall_sites_cellpaired <- list(
-  # file.path(cell_data, "outfall_sites_cellpaired_NTE.parquet") %>% arrow::read_parquet(),
-  # file.path(cell_data, "outfall_sites_cellpaired_TAS.parquet") %>% arrow::read_parquet(),
-  # file.path(cell_data, "outfall_sites_cellpaired_VIC.parquet") %>% arrow::read_parquet(),
-  # file.path(cell_data, "outfall_sites_cellpaired_QLD.parquet") %>% arrow::read_parquet(),
-  # file.path(cell_data, "outfall_sites_cellpaired_SAU.parquet") %>% arrow::read_parquet(),
-  # file.path(cell_data, "outfall_sites_cellpaired_WAN.parquet") %>% arrow::read_parquet(),
-  # file.path(cell_data, "outfall_sites_cellpaired_WAS.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "outfall_sites_cellpaired_NTE.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "outfall_sites_cellpaired_TAS.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "outfall_sites_cellpaired_VIC.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "outfall_sites_cellpaired_QLD.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "outfall_sites_cellpaired_SAU.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "outfall_sites_cellpaired_WAN.parquet") %>% arrow::read_parquet(),
+  file.path(cell_data, "outfall_sites_cellpaired_WAS.parquet") %>% arrow::read_parquet(),
   file.path(cell_data, "outfall_sites_cellpaired_NSW.parquet") %>% arrow::read_parquet()
   ) %>% 
   bind_rows() %>% 
-  group_by(state, cell_no) %>% 
+  group_by(name) %>% 
   reframe(matched = n())
 ```
 
@@ -477,8 +481,6 @@ Matching cells to outfall stations within 48 km resulted in
 The remaining 
 `r round(100*length(outfall_sites_cellpaired$matched[is.na(outfall_sites_cellpaired$matched)])/sum(totals$cells), 2)`% of cells did not use data from any outfall sites. 
 
-These two nutrient data sources were combined into a single “typical” year for each nutrient, with outfall data being additionally weighted by the total volume of water recorded from the outfall location relative to a cell’s volume of surface water (4 km $\times$ 4 km $\times$ 12.5 m). Finally, a small degree of random variation (up to $\pm$10% of standard deviation from the mean) was added to daily values of nitrate and ammonium. This was done to better reflect the high degree of variability generally recorded in nitrate and ammonium levels, forcing the macroalgae in the model to contend with some instability in its nutrient supply. fig-example-N-input shows an example of the final nitrate and ammonium concentrations driving the growth model in a single cell, located in New South Wales.
-
 ```{r fig-example-N-input}
 #| eval: true
 #| cache: true
@@ -486,47 +488,42 @@ These two nutrient data sources were combined into a single “typical” year f
 #| fig-height: 6
 #| fig-cap: An example of the daily nitrate (top) and ammonium (bottom) input and data for a single cell in New South Wales. Black lines show the input driving the growth model (constructed curve), blue dots show data from the nearest reference station (Port Hacking) and orange dots show distance-weighted data from the three nearest outfall points (Bateman’s Bay, Bermagui, and Bombo). 
 
-df2 <- cell_input_timeseries %>% 
-  dplyr::filter(cell_no == 753076) %>% 
-  dplyr::select(c(yday, Ni_input, Am_input)) %>% 
-  pivot_longer(names_to = "form", values_to = "value", cols = c(Ni_input, Am_input)) %>% 
-  mutate(form = factor(form, levels = c("Ni_input", "Am_input"), labels = c("1", "2")))
-  
 st <- here() %>% file.path("targets_outputs", "_model_running_NSW")
 BARRA_C2_cell_nos <- tar_read(BARRA_C2_cell_nos, store = st)
 ind <- which(BARRA_C2_cell_nos == 753076)
 
-day15 <- data.frame(month = 1:12, day = rep(15, 12)) %>%
-  mutate(yday = yday(make_date(year = 2023, month = month, day = day)))
- 
 ref <- tar_read(refstation_cell_match, branches = ind, store = st)
 out <- tar_read(outfall_sites_cellpaired, branches = ind, store = st)
 
-Ni_data_prioritised <- tar_read(Ni_data_prioritised, store = st, branches = ind)[[1]]
-Ni_curve <- c(Ni_data_prioritised['a'], Ni_data_prioritised['b'], Ni_data_prioritised['c'])
-Ni_data_prioritised <- Ni_data_prioritised["data"][[1]] %>%
-  mutate(source = case_when(yday %in% day15$yday ~ "outfall", TRUE ~ "refstation"),
-         form = "1") %>%
-  merge(cell_coords, by = "cell_no")
+Ni_data_prioritised <- tar_read(Ni_data_prioritised, store = st, branches = ind)[[1]]["data"][[1]] %>% 
+  mutate(form = "nitrate")
+Am_data_prioritised <- tar_read(Am_data_prioritised, store = st, branches = ind)[[1]]["data"][[1]] %>% 
+  mutate(form = "ammonium")
+cell_input <- tar_read(cell_input_timeseries, store = st, branches = ind) %>% 
+  dplyr::select(c(yday, Ni_input, Am_input, cell_no)) %>% 
+  pivot_longer(names_to = "form", values_to = "value", cols = c(Ni_input, Am_input)) %>% 
+  mutate(form = factor(form, levels = c("Ni_input", "Am_input"), labels = c("nitrate", "ammonium")),
+         value = set_units(value, "mg m-3"),
+         value = set_units(value, "umol L-1"),
+         value = drop_units(value)) %>% 
+  dplyr::filter(yday <= 365)
 
-Am_data_prioritised <- tar_read(Am_data_prioritised, store = st, branches = ind)[[1]]
-Am_curve <- c(Am_data_prioritised['a'], Am_data_prioritised['b'], Am_data_prioritised['c'])
-Am_data_prioritised <- Am_data_prioritised["data"][[1]] %>%
-  mutate(source = case_when(yday %in% day15$yday ~ "outfall", TRUE ~ "refstation"),
-         form = "2") %>%
-  merge(cell_coords, by = "cell_no") %>% 
-  dplyr::select(-weighted_value)
-
-df <- rbind(Ni_data_prioritised, Am_data_prioritised) %>%
+df <- rbind(
+  Ni_data_prioritised, 
+  Am_data_prioritised
+) %>%
   mutate(value = set_units(value, "mg m-3"),
          value = set_units(value, "umol L-1"),
-         value = drop_units(value))
+         value = drop_units(value),
+         form = factor(form, levels = c("nitrate", "ammonium"))) %>% 
+  filter(yday <= 365)
   
-ggplot(df, aes(x = yday, y = value, color = as.factor(source))) +
-  geom_point() +
+ggplot(df, aes(x = yday, y = value, fill = as.factor(data_source), colour = as.factor(data_source), size = weight)) +
+  geom_point(shape = 21, alpha = 0.35) +
   facet_wrap(facets = vars(form), nrow = 2) +
-  geom_line(data = df2, aes(x = yday, y = value), inherit.aes = F) +
-  scale_color_manual(values = c("orange", "steelblue")) +
+  geom_line(data = cell_input, aes(x = yday, y = value), inherit.aes = F) +
+  scale_fill_manual(values = c("orange", "steelblue")) +
+  scale_colour_manual(values = c("orange", "steelblue")) +
   scale_y_continuous(limits = c(0, 3.5), breaks = seq(0, 4, 0.5)) +
   env_plot +
   theme(strip.text = element_blank()) +
@@ -535,6 +532,7 @@ ggplot(df, aes(x = yday, y = value, color = as.factor(source))) +
 
 ```{r Ni input data}
 #| eval: true
+#| cache: false
 
 Ni_input <- cell_input_timeseries %>% 
   select(cell_no, state, yday, Ni_input)
@@ -547,8 +545,14 @@ Ni_input <- cell_input_timeseries %>%
   mutate(variable = "Ni_input"))
 ```
 
+Mean daily water velocity ranged from 
+`r round(min(Ni_means$mean), 2)` in `r as.character(Ni_means$state[Ni_means$mean == min(Ni_means$mean)])` to 
+`r round(max(Ni_means$mean), 2)` in `r as.character(Ni_means$state[Ni_means$mean == max(Ni_means$mean)])`,
+with a mean across states of `r round(mean(Ni_means$mean), 2)`. 
+
 ```{r fig-Ni-input}
 #| eval: true
+#| cache: false
 #| fig-width: 8
 #| fig-height: 7
 #| fig-cap: Summary of nitrate concentration values across the year within each state, averaged across 2019-2023. Bold lines show the mean across all cells within each state while ribbons show the standard deviation between cells.
@@ -574,6 +578,7 @@ Ni_input_state <- Ni_input %>%
 
 ```{r Am input data}
 #| eval: true
+#| cache: false
 
 Am_input <- cell_input_timeseries %>% 
   select(cell_no, state, yday, Am_input)
@@ -586,8 +591,14 @@ Am_input <- cell_input_timeseries %>%
   mutate(variable = "Am_input"))
 ```
 
+Mean daily water velocity ranged from 
+`r round(min(Am_means$mean), 2)` in `r as.character(Am_means$state[Am_means$mean == min(Am_means$mean)])` to 
+`r round(max(Am_means$mean), 2)` in `r as.character(Am_means$state[Am_means$mean == max(Am_means$mean)])`,
+with a mean across states of `r round(mean(Am_means$mean), 2)`. 
+
 ```{r fig-Am-input}
 #| eval: true
+#| cache: false
 #| fig-width: 8
 #| fig-height: 7
 #| fig-cap: Summary of ammonium concentration values across the year within each state, averaged across 2019-2023. Bold lines show the mean across all cells within each state while ribbons show the standard deviation between cells.
@@ -628,6 +639,8 @@ state_input_timeseries <- list(
 sens_cond <- file.path(spec_data, "sensitivity_conditions.parquet") %>% 
   arrow::read_parquet()
 ```
+
+Culture depths tested were `r culture_depths` m below the surface, with a 
 
 Sensitivity runs started on the first of every month to cover annual variability, for 12 runs per year, with the same mean annual conditions looping from December to January. Sensitivity runs were conducted at culture depths of 0.5 m, 2 m, 3.5 m, and 5 m below the surface with a light attenuation coefficient of 0.65 (clear water). The canopy was always 2.5 m in height, and the total water column depth was always 50 m.
 Curves for temperature, surface irradiance, salinity, water velocity, nitrate and ammonium were constructed to capture “typical” conditions based on daily means of each state from 2019-2023. This resulted in two sensitivity curves for temperature (fig-state-temperature) and a single sensitivity curve for irradiance (fig-state-irradiance), water velocity (fig-state-water-velocity), salinity (fig-state-salinity), nitrate (fig-state-nitrate) and ammonium (fig-state-ammonium).
@@ -895,101 +908,6 @@ Ilim_cell <- Ilim_cell %>%
 # Results 
 ## Species parameterisation
 
-```{r fig-N-uptake}
-#| eval: false
-#| fig-width: 6
-#| fig-height: 3.9
-#| fig-cap: |
-#|   Uptake rates of nitrate (solid lines) and ammonium (dashed lines) by _Asparagopsis_ (red), _Ulva_ (green), or _Ecklonia_ (blue) at varying ambient concentrations.
-
-N_uptake <- file.path(spec_data, "N_uptake.parquet") %>% 
-  read_parquet()
-
-ggplot(N_uptake, aes(x = uM, y = uptake_uM, linetype = form)) +
-  geom_line(linewidth = 0.75) +
-  labs(x = expression("Ambient concentration ("*mu*"M)"), y = expression("Uptake rate ("*mu*"mol gDW"^-1*"d"^-1*")")) +
-  scale_y_continuous(breaks = seq(0, 3.5, 0.05), limits = c(0, 0.30)) +
-  scale_x_continuous(breaks = seq(0, 30, 5), limits = c(0,25)) +
-  prettyplot + 
-  theme(legend.position = "none",
-        aspect.ratio = 0.65,
-        text = element_text(family = "sans", size = 10, colour = "black"))
-```
-
-```{r fig-temperature-response}
-#| eval: false
-#| fig-width: 6
-#| fig-height: 3.9
-#| fig-cap: |
-#|   Temperature-growth response of _Asparagopsis armata_ (blue), _Asparagopsis taxiformis_ (red).
-
-T_response <- file.path(spec_data, "T_response.parquet") %>% 
-  read_parquet() %>% 
-  mutate(species = factor(species, levels = c("taxi", "arma")))
-
-ggplot(T_response, aes(x = temp, y = Tlim, colour = species)) +
-  geom_line(linewidth = 0.75) +
-  labs(x = expression("Temperature ("*degree*"C)"), y = "Relative growth") +
-  scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0,1)) +
-  scale_x_continuous(breaks = seq(0, 40, 5), limits = c(0,35)) +
-  prettyplot + 
-  theme(
-    legend.position = "none",
-    legend.title = element_blank(),
-    aspect.ratio = 0.65,
-    text = element_text(family = "sans", size = 10, colour = "black")
-    )
-```
-
-```{r fig-light-response}
-#| eval: false
-#| fig-width: 6
-#| fig-height: 3.9
-#| fig-cap: |
-#|   Irradiance-growth response of _Asparagopsis_ when grown at 1 m depth (solid lines), 2 m (dashed), 5 (dot-dash) or 10 m depth (dotted lines) and with a starting Nf=500 mg m-3, of approx. 0.0005 g L-1. Light attenuation coefficient kW = 0.6 in all scenarios.  
-
-I_response <- file.path(spec_data, "I_response.parquet") %>% 
-  read_parquet() %>% 
-  mutate(depth_m = as.factor(depth_m))
-
-ggplot(I_response, aes(x = light, y = Ilim, linetype = as.factor(depth_m))) +
-  geom_line(linewidth = 0.75) +
-  facet_wrap(facets = vars(species)) +
-  labs(x = expression("Surface light (PPFD)"), y = "Relative growth") +
-  scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0,1)) +
-  scale_linetype_manual(values = c("solid", "dashed", "dotdash", "dotted")) +
-  prettyplot + 
-  theme(
-    legend.position = "none",
-    aspect.ratio = 0.65,
-    text = element_text(family = "sans", size = 10, colour = "black"),
-    strip.text = element_blank()
-    )
-```
-
-```{r fig-salinity-response}
-#| eval: false
-#| fig-width: 6
-#| fig-height: 3.9
-#| fig-cap: |
-#|   Salinity-growth response of _Asparagopsis_
-
-S_response <- file.path(spec_data, "S_response.parquet") %>% 
-  read_parquet()
-
-ggplot(S_response, aes(x = sali, y = Slim)) +
-  geom_line(linewidth = 0.75) +
-  labs(x = expression("Salinity (g L"^-1*")"), y = "Relative growth") +
-  scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0,1)) +
-  scale_x_continuous(breaks = seq(0, 60, 5), limits = c(19,45)) +
-  prettyplot + 
-  theme(
-    legend.position = "none",
-    aspect.ratio = 0.65,
-    text = element_text(family = "sans", size = 10, colour = "black")
-    )
-```
-
 ```{r fig-all-responses}
 #| eval: true
 #| fig-width: 8
@@ -999,6 +917,17 @@ ggplot(S_response, aes(x = sali, y = Slim)) +
 
 library(gridExtra)
 library(grid)
+
+N_uptake <- file.path(spec_data, "N_uptake.parquet") %>% 
+  read_parquet()
+S_response <- file.path(spec_data, "S_response.parquet") %>% 
+  read_parquet()
+I_response <- file.path(spec_data, "I_response.parquet") %>% 
+  read_parquet() %>% 
+  mutate(depth_m = as.factor(depth_m))
+T_response <- file.path(spec_data, "T_response.parquet") %>% 
+  read_parquet() %>% 
+  mutate(species = factor(species, levels = c("taxi", "arma")))
 
 p1 <- ggplot(N_uptake, aes(x = uM, y = uptake_uM, linetype = form)) +
   geom_line(linewidth = 0.75) +
@@ -1218,17 +1147,17 @@ Figure 23: Limitation of relative growth by temperature for *A. taxiformis* acro
 
 ### Light limitation
 
-```{r Tlim-data}
-#| eval: true
+```{r Ilim-data}
+#| eval: false
 
-Tlim_cell <- list(
-  # file.path(runs_data, "Ilim_cell_PL_NTE.parquet") %>% arrow::read_parquet(),
-  # file.path(runs_data, "Ilim_cell_PL_TAS.parquet") %>% arrow::read_parquet(),
-  # file.path(runs_data, "Ilim_cell_PL_VIC.parquet") %>% arrow::read_parquet(),
-  # file.path(runs_data, "Ilim_cell_PL_QLD.parquet") %>% arrow::read_parquet(),
-  # file.path(runs_data, "Ilim_cell_PL_SAU.parquet") %>% arrow::read_parquet(),
-  # file.path(runs_data, "Ilim_cell_PL_WAS.parquet") %>% arrow::read_parquet(),
-  # file.path(runs_data, "Ilim_cell_PL_WAN.parquet") %>% arrow::read_parquet(),
+Ilim_cell <- list(
+  file.path(runs_data, "Ilim_cell_PL_NTE.parquet") %>% arrow::read_parquet(),
+  file.path(runs_data, "Ilim_cell_PL_TAS.parquet") %>% arrow::read_parquet(),
+  file.path(runs_data, "Ilim_cell_PL_VIC.parquet") %>% arrow::read_parquet(),
+  file.path(runs_data, "Ilim_cell_PL_QLD.parquet") %>% arrow::read_parquet(),
+  file.path(runs_data, "Ilim_cell_PL_SAU.parquet") %>% arrow::read_parquet(),
+  file.path(runs_data, "Ilim_cell_PL_WAS.parquet") %>% arrow::read_parquet(),
+  file.path(runs_data, "Ilim_cell_PL_WAN.parquet") %>% arrow::read_parquet(),
   file.path(runs_data, "Ilim_cell_PL_NSW.parquet") %>% arrow::read_parquet()
 ) %>% 
   bind_rows()
