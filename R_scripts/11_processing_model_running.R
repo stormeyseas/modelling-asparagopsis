@@ -37,33 +37,61 @@ projects <- tibble::tribble(
   "WAN",  "targets_outputs/_model_running_WAN",  
   "NTE",  "targets_outputs/_model_running_NTE"
 )
+sc <- "R_scripts/09_model_running.R"
+# mani <- tar_manifest(script = sc)
+# meta <- tar_meta(store = projects$st[6])
 
 # Globals ---------------------------------------------------------------------------------------------------------
-states <- tar_read(states, store = proj$st[1])
+states <- tar_read(states, store = projects$st[1])
+theo_scens <- tar_read(theo_scens, store = projects$st[1]) %>% 
+  arrow::write_parquet(file.path(out_path_2, "theo_scens.parquet"))
 
-tar_read(BARRA_C2_cell_coords, store = proj$st[1]) %>% 
+tar_read(BARRA_C2_cell_coords, store = projects$st[1]) %>% 
   mutate(state = factor(state, levels = states)) %>% 
   arrow::write_parquet(file.path(out_path, "BARRA_C2_cell_coords.parquet"))
 
+tar_read(refstation_coords, store = projects$st[1]) %>% 
+  arrow::write_parquet(file.path(out_path, "refstation_coords.parquet"))
+
+tar_read(outfall_locations, store = projects$st[1]) %>% 
+  arrow::write_parquet(file.path(out_path, "outfall_locations.parquet"))
+
+# State targets ---------------------------------------------------------------------------------------------------
 for (i in 1:nrow(projects)) {
   # Cell input data
-  tar_read(cell_input_timeseries, store = proj$st[i]) %>% 
+  tar_read(cell_input_timeseries, store = projects$st[i]) %>% 
     dplyr::filter(yday <= 365) %>% 
     mutate(state = factor(state, levels = states)) %>% 
-    arrow::write_parquet(file.path(out_path, paste0("cell_input_timeseries_", proj$state[i], ".parquet")))
+    arrow::write_parquet(file.path(out_path, paste0("cell_input_timeseries_", projects$state[i], ".parquet")))
 
-  tar_read(state_input_timeseries, store = proj$st[i]) %>% 
-    arrow::write_parquet(file.path(out_path, paste0("state_input_timeseries_", proj$state[i], ".parquet")))
+  tar_read(state_input_timeseries, store = projects$st[i]) %>% 
+    arrow::write_parquet(file.path(out_path, paste0("state_input_timeseries_", projects$state[i], ".parquet")))
   
-  BARRA_C2_cell_nos <- tar_read(BARRA_C2_cell_nos, store = proj$st[i])
-  refstation_cell_match <- tar_read(refstation_cell_match, store = proj$st[i])
+  BARRA_C2_cell_nos <- tar_read(BARRA_C2_cell_nos, store = projects$st[i])
+  refstation_cell_match <- tar_read(refstation_cell_match, store = projects$st[i])
   refstation_cell_match$cell_no <- rep(BARRA_C2_cell_nos, each = 2)
-  arrow::write_parquet(refstation_cell_match, file.path(out_path, paste0("refstation_cell_match_", proj$state[i], ".parquet")))
+  arrow::write_parquet(refstation_cell_match, file.path(out_path, paste0("refstation_cell_match_", projects$state[i], ".parquet")))
   rm(refstation_cell_match)
   
-  tar_read(outfall_sites_cellpaired, store = proj$st[i]) %>% 
-    arrow::write_parquet(file.path(out_path, paste0("outfall_sites_cellpaired_", proj$state[i], ".parquet")))
+  tar_read(outfall_sites_cellpaired, store = projects$st[i]) %>% 
+    arrow::write_parquet(file.path(out_path, paste0("outfall_sites_cellpaired_", projects$state[i], ".parquet")))
 
+  tar_read(total_cell_growth, store = projects$st[i]) %>% 
+    arrow::write_parquet(file.path(out_path, paste0("total_cell_growth_", projects$state[i], ".parquet")))
+
+  tar_read(theo_scen_growth, store = projects$st[i]) %>% 
+    arrow::write_parquet(file.path(out_path, paste0("total_cell_growth_", projects$state[i], ".parquet")))
   
+  tar_read(total_cell_growth_end_TN, store = projects$st[i]) %>% 
+    arrow::write_parquet(file.path(out_path, paste0("total_cell_growth_end_TN_", projects$state[i], ".parquet")))
+  
+  tar_read(total_theo_growth_end_TN, store = projects$st[i]) %>% 
+    arrow::write_parquet(file.path(out_path, paste0("total_theo_growth_end_TN_", projects$state[i], ".parquet")))
+  
+  tar_read(cell_growth_lims, store = projects$st[i]) %>% 
+    arrow::write_parquet(file.path(out_path, paste0("cell_growth_lims_", projects$state[i], ".parquet")))
+  
+  tar_read(theo_growth_lims, store = projects$st[i]) %>% 
+    arrow::write_parquet(file.path(out_path, paste0("theo_growth_lims_", projects$state[i], ".parquet")))
 }
 

@@ -138,7 +138,7 @@ list(
     BARRA_C2_cell_nos, 
     BARRA_C2_cell_coords %>% 
       filter(state == this_state) %>%
-      slice_sample(n = 2250) %>%
+      # slice_sample(n = 2250) %>%
       select(cell_no) %>% unlist() %>% unname()
   ),
   
@@ -452,44 +452,44 @@ list(
   ),
   
   ## Irradiance lims (depth testing) ------------------------------------------------------------------------------
-  tar_target(
-    date_range_PL, 
-    seq(
-      lubridate::make_date(year = 2023, month = 1, day = 1), 
-      lubridate::make_date(year = 2023, month = 12, day = 31), 
-      by = 'days'
-    )
-  ),
-  tar_target(yday_range_PL, lubridate::yday(date_range_PL)),
-
-  tar_target(d_top_PL, (c(0.5, 1, 1.5, 2, 2.5, 3))),
-  tar_target(
-    Ilim_cell_PL,
-    command = {
-      df <- data.frame(
-        t = 1:length(date_range_PL),
-        yday = lubridate::yday(date_range_PL),
-        irradiance = cell_input_timeseries$I_input[yday_range_PL],
-        kW = cell_input_timeseries$Kd_490[yday_range_PL]
-      )
-      df$I_lim <- sapply(
-          X = df$irradiance,
-          FUN = I_lim,
-          Nf = unlist(init_state[[1]]["Nf"]) %>% unname(),
-          kW = df$kW,
-          spec_params = unlist(species_data[[1]]),
-          site_params = c(d_top = d_top_PL)
-        ) %>% 
-        diag()
-      df %>%
-        mutate(
-          state = factor(this_state, levels = states),
-          cell_no = BARRA_C2_cell_nos,
-          depth = d_top_PL,
-        )
-    },
-    pattern = cross(d_top_PL, map(BARRA_C2_cell_nos, cell_input_timeseries))
-  ),
+  # tar_target(
+  #   date_range_PL, 
+  #   seq(
+  #     lubridate::make_date(year = 2023, month = 1, day = 1), 
+  #     lubridate::make_date(year = 2023, month = 12, day = 31), 
+  #     by = 'days'
+  #   )
+  # ),
+  # tar_target(yday_range_PL, lubridate::yday(date_range_PL)),
+  # 
+  # tar_target(d_top_PL, (c(0.5, 1, 1.5, 2, 2.5, 3))),
+  # tar_target(
+  #   Ilim_cell_PL,
+  #   command = {
+  #     df <- data.frame(
+  #       t = 1:length(date_range_PL),
+  #       yday = lubridate::yday(date_range_PL),
+  #       irradiance = cell_input_timeseries$I_input[yday_range_PL],
+  #       kW = cell_input_timeseries$Kd_490[yday_range_PL]
+  #     )
+  #     df$I_lim <- sapply(
+  #         X = df$irradiance,
+  #         FUN = I_lim,
+  #         Nf = unlist(init_state[[1]]["Nf"]) %>% unname(),
+  #         kW = df$kW,
+  #         spec_params = unlist(species_data[[1]]),
+  #         site_params = c(d_top = d_top_PL)
+  #       ) %>% 
+  #       diag()
+  #     df %>%
+  #       mutate(
+  #         state = factor(this_state, levels = states),
+  #         cell_no = BARRA_C2_cell_nos,
+  #         depth = d_top_PL,
+  #       )
+  #   },
+  #   pattern = cross(d_top_PL, map(BARRA_C2_cell_nos, cell_input_timeseries))
+  # ),
   # tar_target(
   #   Ilim_cell_consec,
   #   command = {
@@ -510,22 +510,13 @@ list(
   #   pattern = Ilim_cell_PL
   # ),
   # Total growth --------------------------------------------------------------------------------------------------
-  tar_target(months_growth, 1:12),
-  tar_target(start_dates_growth, 
-             lubridate::ceiling_date(lubridate::make_date(2023, months_growth, 15), 'month') - lubridate::days(42+1), 
-             pattern = months_growth),
-  tar_target(start_ydays_growth, lubridate::yday(start_dates_growth), pattern = start_dates_growth),
+  tar_target(months_growth, 1:2),
   tar_target(
-    site_params,
-    c(
-      hc = 5,
-      farmA = 50 * 50,
-      turbulence = NA,
-      d_top = 2.5,
-      hz = terra::extract(BathyTopo_raster, BARRA_C2_cell_nos) %>% unlist() %>% unname() %>% abs()
-    ),
-    pattern = BARRA_C2_cell_nos
+    start_dates_growth, 
+    lubridate::ceiling_date(lubridate::make_date(2023, months_growth, 15), 'month') - lubridate::days(42+1), 
+    pattern = months_growth
   ),
+  tar_target(start_ydays_growth, lubridate::yday(start_dates_growth), pattern = start_dates_growth),
   tar_target(
     total_cell_growth,
     command = {
@@ -540,6 +531,11 @@ list(
         } else {
           velocity <- cell_input_timeseries$UV_input[start_ydays_growth:(start_ydays_growth + 42)]
         }
+        if(any(is.na(cell_input_timeseries$Kd_490[start_ydays_growth:(start_ydays_growth + 42)]))) {
+          kW <- state_input_timeseries$Kd_490_mean[start_ydays_growth:(start_ydays_growth + 42)]
+        } else {
+          kW <- cell_input_timeseries$Kd_490[start_ydays_growth:(start_ydays_growth + 42)]
+        }
         
         mat <- grow_macroalgae(
           start =        start_ydays_growth,
@@ -547,32 +543,39 @@ list(
           temperature =  cell_input_timeseries$T_input[start_ydays_growth:(start_ydays_growth + 42)],
           salinity =     salinity,
           light =        cell_input_timeseries$I_input[start_ydays_growth:(start_ydays_growth + 42)],
-          kW =           cell_input_timeseries$Kd_490[start_ydays_growth:(start_ydays_growth + 42)],
+          kW =           kW,
           velocity =     velocity,
           nitrate =      cell_input_timeseries$Ni_input[start_ydays_growth:(start_ydays_growth + 42)],
           ammonium =     cell_input_timeseries$Am_input[start_ydays_growth:(start_ydays_growth + 42)],
           ni_uptake =    "linear",
           am_uptake =    "MM",
-          site_params =  site_params, 
+          site_params =  c(
+            hc = 5,
+            farmA = 50 * 50,
+            turbulence = NA,
+            d_top = 2.5,
+            hz = terra::extract(BathyTopo_raster, BARRA_C2_cell_nos) %>% unlist() %>% unname() %>% abs()
+          ), 
           spec_params =  unlist(species_data),
           initials =     init_state
         ) 
       } else { # blank df
         mat <- matrix(NA, nrow = 1, ncol = 24)
+        colnames(mat) <- c("t", "Nf", "Ns", "growth_rate", "Ns_to_Nf", "Ns_loss", "Nf_loss", "Q_int", "Q_rel", "Q_lim", "B_dw.mg", "B_ww.mg", "hm", "conc_nitrate", "up_Ni", "conc_ammonium", "up_Am", "conc_other", "up_Ot", "T_lim", "S_lim", "I_top", "I_lim", "u_c")
       }
       mat <- cbind(
         mat,
         matrix(data = mat[,'Ns_loss'] + mat[,'Nf_loss'], nrow = nrow(mat), ncol = 1),
-        matrix(data = (mat[,'Nf'] + mat[,'Ns']) * mat[,'hm'] * site_params['hc'], nrow = nrow(mat), ncol = 1),
+        matrix(data = (mat[,'Nf'] + mat[,'Ns']) * mat[,'hm'] * 5, nrow = nrow(mat), ncol = 1),
         matrix(data = BARRA_C2_cell_nos, nrow = nrow(mat), ncol = 1)
       )
-      colnames(mat) <- c("t", "Nf", "Ns", "growth_rate", "Ns_to_Nf", "Ns_loss", "Nf_loss", "Q_int", "Q_rel", "Q_lim", "B_dw.mg", "B_ww.mg", "hm", "conc_nitrate", "up_Ni", "conc_ammonium", "up_Am", "conc_other", "up_Ot", "T_lim", "S_lim", "I_top", "I_lim", "u_c", "N_loss", "TN", "cell_no")
+      colnames(mat) <- c(colnames(mat)[1:24], "N_loss", "TN", "cell_no")
       mat
     },
     pattern = cross(
       map(species_data, init_state), 
       map(start_dates_growth, start_ydays_growth), 
-      map(BARRA_C2_cell_nos, cell_input_timeseries, site_params)
+      map(BARRA_C2_cell_nos, cell_input_timeseries)
     ),
   ),
   tar_target(
@@ -581,7 +584,7 @@ list(
     pattern = map(total_cell_growth, cross(
       map(species_data, init_state),
       map(start_dates_growth, start_ydays_growth),
-      map(BARRA_C2_cell_nos, cell_input_timeseries, site_params)
+      map(BARRA_C2_cell_nos, cell_input_timeseries)
     ))
   ),
   tar_target( # Won't work
@@ -606,17 +609,6 @@ list(
     command = unique(theo_scens$name)
   ),
   tar_target(
-    theo_site_params,
-    c(
-      hc = 5,
-      farmA = 50 * 50,
-      turbulence = NA,
-      d_top = 2.5,
-      hz = theo_scens$bathy[theo_scens$name == theo_names]
-    ),
-    pattern = theo_names
-  ),
-  tar_target(
     theo_scen_growth,
     command = {
       mat <- grow_macroalgae(
@@ -637,14 +629,20 @@ list(
           theo_scens$Am_add[theo_scens$name == theo_names],
         ni_uptake =    "linear",
         am_uptake =    "MM",
-        site_params =  theo_site_params, 
+        site_params =  c(
+          hc = 5,
+          farmA = 50 * 50,
+          turbulence = NA,
+          d_top = 2.5,
+          hz = theo_scens$bathy[theo_scens$name == theo_names]
+        ), 
         spec_params =  unlist(species_data),
         initials =     init_state
       ) 
       mat <- cbind(
         mat,
         matrix(data = mat[,'Ns_loss'] + mat[,'Nf_loss'], nrow = nrow(mat), ncol = 1),
-        matrix(data = (mat[,'Nf'] + mat[,'Ns']) * mat[,'hm'] * theo_site_params['hc'], nrow = nrow(mat), ncol = 1),
+        matrix(data = (mat[,'Nf'] + mat[,'Ns']) * mat[,'hm'] * 5, nrow = nrow(mat), ncol = 1),
         matrix(data = theo_scens$num[theo_scens$name == theo_names], nrow = nrow(mat), ncol = 1)
       )
       colnames(mat) <- c("t", "Nf", "Ns", "growth_rate", "Ns_to_Nf", "Ns_loss", "Nf_loss", "Q_int", "Q_rel", "Q_lim", "B_dw.mg", "B_ww.mg", "hm", "conc_nitrate", "up_Ni", "conc_ammonium", "up_Am", "conc_other", "up_Ot", "T_lim", "S_lim", "I_top", "I_lim", "u_c", "N_loss", "TN", "theo_scen")
@@ -653,7 +651,7 @@ list(
     pattern = cross(
       map(species_data, init_state), 
       map(start_dates_growth, start_ydays_growth), 
-      map(theo_names, site_params)
+      theo_names
     ),
   ),
   tar_target(
@@ -662,7 +660,7 @@ list(
     pattern = map(theo_scen_growth, cross(
       map(species_data, init_state), 
       map(start_dates_growth, start_ydays_growth), 
-      map(theo_names, site_params)
+      theo_names
     ))
   ),
   tar_target( # Won't work

@@ -46,25 +46,27 @@ source("R_scripts/08_extract-AusBathyTopo-data.R")
 
 ## Targets cell data ----------------------------------------------------------------------------------------------
 projects <- tibble::tribble(
-  ~state, ~sc, ~st, ~upd,
-  "QLD",  "R_scripts/07.3_model_running_QLD.R", "targets_outputs/_model_running_QLD", NA, 
-  "TAS",  "R_scripts/07.1_model_running_TAS.R", "targets_outputs/_model_running_TAS", NA, 
-  "SAU",  "R_scripts/07.4_model_running_SAU.R", "targets_outputs/_model_running_SAU", NA, 
-  "WAS",  "R_scripts/07.6_model_running_WAS.R", "targets_outputs/_model_running_WAS", NA, 
-  "NSW",  "R_scripts/07.8_model_running_NSW.R", "targets_outputs/_model_running_NSW", NA, 
-  "VIC",  "R_scripts/07.2_model_running_VIC.R", "targets_outputs/_model_running_VIC", NA, 
-  "WAN",  "R_scripts/07.5_model_running_WAN.R", "targets_outputs/_model_running_WAN", NA, 
-  "NTE",  "R_scripts/07.7_model_running_NTE.R", "targets_outputs/_model_running_NTE", NA
+  ~state, ~st, ~upd,
+  "QLD",  "targets_outputs/_model_running_QLD", NA, 
+  "TAS",  "targets_outputs/_model_running_TAS", NA, 
+  "SAU",  "targets_outputs/_model_running_SAU", NA, 
+  "WAS",  "targets_outputs/_model_running_WAS", NA, 
+  "NSW",  "targets_outputs/_model_running_NSW", NA, 
+  "VIC",  "targets_outputs/_model_running_VIC", NA, 
+  "WAN",  "targets_outputs/_model_running_WAN", NA, 
+  "NTE",  "targets_outputs/_model_running_NTE", NA
 )
 sc <- "R_scripts/09_model_running.R"
 
 ### Prune ---------------------------------------------------------------------------------------------------------
 for (i in 1:nrow(projects)) {
   projects$state[i] %>% qsave("targets_outputs/this_state.qs")
-  try({
-    tar_prune(script = sc, store = projects$st[i])
-    projects$upd[i] <- 1
-  })
+  # try({
+  #   tar_prune(script = sc, store = projects$st[i])
+  #   projects$upd[i] <- 1
+  # })
+  fnms <- "targets_outputs" %>% list.files(full.names = T, recursive = T) %>% str_subset("Ilim_cell_PL")
+  file.remove(fnms)
 }
 
 ### Ilim only -----------------------------------------------------------------------------------------------------
@@ -87,14 +89,11 @@ source("R_scripts/10_processing_Ilim_data.R") # I_lim depth testing
 # Comment out the slice_sample(n = 2250) line in BARRA_C2_cell_nos
 # DO NOT run Ilim_cell_PL - maybe comment that out too
 
-tar_workspace(total_cell_growth_234a709e9f8ad1f0, store = "targets_outputs/_model_running_QLD")
-
 projects <- projects %>% dplyr::filter(is.na(upd))
 for (i in 1:nrow(projects)) {
-  projects$state[i] %>% qsave("targets_outputs/this_state.qs")
+  projects$state[i] %>% qs::qsave("targets_outputs/this_state.qs")
   try({
     tar_make(
-      names = c("total_cell_growth", "growth_lims", "theo_scens", "theo_site_params"),
       seconds_meta_append = 90, shortcut = F, script = sc, store = projects$st[i]
     )
     projects$upd[i] <- 1
