@@ -6,7 +6,7 @@ date-modified: today
 format: 
   html:
     theme: simplex
-    css: ["../resources/extra.css"]
+    css: ["extra.css"]
     code-fold: true
     code-overflow: wrap
     toc: true
@@ -73,12 +73,14 @@ install_unit("gFW")
 remove_unit("photons")
 install_unit("photons")
 
-# Only works because I'm always working in nitrogen
-remove_unit("mol")
-install_unit("mol", "14.0067 g")
+# This allows me to convert between moles and g of nitrogen
+remove_unit("gN")
+install_unit("gN")
+remove_unit("molN")
+install_unit("molN", "14.0067 gN")
 
-S_uM <- set_units(seq(0, 200, 0.5), "umol L-1")
-S_mg <- set_units(S_uM, "mg m-3")
+S_uM <- set_units(seq(0, 200, 0.5), "umolN L-1")
+S_mg <- set_units(S_uM, "mgN m-3")
 ```
 
 The _Asparagopsis_ genus (and especially _A. armata_) is invasive in the northeastern Atlantic and the Mediterranean [@zanolla_concise_2022]. It has been studied more as an invasive genus than a native one. 
@@ -107,44 +109,45 @@ V_am <- K_am <- M_am <- C_am <- V_ni <- K_ni <- M_ni <- C_ni <- V_ot <- K_ot <- 
 K_c <- 6
 ```
 
-## Phosphorus limitation
+## Limitation by other nutrients
 
 It has been suggested that the model should include the possibility of phosphorus limitation, as well as nitrogen limitation (switching between the limiting nutrient based on availability/internal conditions). This was considered because the places where macroalgae is being grown for nitrogen bioremediation purposes (river outflows, next to fish farms) are likely to be very high in nitrogen but not necessarily phosphates. 
 
-However, it was decided not to include phosphorus limitation. While the mechanics of including it would be fairly simple, research into the required parameters (shape and rate of uptake, internal requirements) are almost non-existent for _Asparagopsis_. @grisenthwaite_establishing_2023 may possibly have some of this data for tetrasporophytes but I have yet to find anything similar for gametophytes. 
+However, it was decided not to include phosphorus limitation. While the mechanics of including it would be fairly simple, research into the required parameters (shape and rate of uptake, internal requirements) are almost non-existent for _Asparagopsis_. @grisenthwaite_establishing_2023 may possibly have some of this data for tetrasporophytes(?) but I have yet to find anything similar for gametophytes. 
 If the 'standard', not species-specific Atkinson ratio of N:P were assumed [@atkinson_cnp_1983], then the algae would require 1/30^th^ as much phosphorus as nitrogen to maintain the modelled growth. Given that macroalgae require so much more nitrogen than phosphorus, it seems unlikely that they are ever going to be phosphorus limited in coastal or oceanic waters. 
 Phosphates are also not often measured in marine waters, so obtaining ambient data would be extremely difficult.
 
 Still, if the Atkinson ratio (30:1 N:P) were assumed and phosphate uptake kinetics were ignored, then the minimum phosphate concentrations required to maintain the modelled growth can be estimated and reported as an additional consideration.
 
+Also possibly carbon? Check @mata_direct_2010.
+
 ## Still to investigate
 
-* @chualain_invasive_2004
 * @cole_using_2014
 * @dishon_effect_2023
 * @kraan_commercial_2005
 * @mata_integrated_2008
-* @mata_within-species_2017
-* @mihaila_moderate_2024
 * @monro_evolutionary_2007
-* @padilla-gamino_seasonal_2007
-* @schuenhoff_tetrasporophyte_2006
-* @torres_nitrogen_2021
 * @torres_effects_2024
 * @wiltshire_feasibility_2015
-* @zanolla_assessing_2018
 * @zanolla_there_2019
-* @zanolla_concise_2022
 
-# Tetrasporophytes 
-## Nitrogen uptake {#sec-nitrogen-uptake-tetrasporophyte}
-### Linear uptake {#sec-nitrogen-uptake-tetrasporophyte-linear}
+# Nitrogen uptake {#sec-nitrogen-uptake}
+## Linear uptake {#sec-nitrogen-uptake-linear}
+
+It's possible that the gametophyte and tetrasporophyte will have different uptake rates of ammonium and nitrate, and in the wild they do not appear to be affected by fluctuations in nutrients [@zanolla_concise_2022; @zanolla_structure_2018, @zanolla_assessing_2018]. However, if we assume that the gametophyte has a similar preference for ammonium to the sporophyte then it's not surprising that it would show little response to nutrients in the environment, as natural nitrogen is mostly in nitrate form with ammonium only being present at constant low levels generally. 
+
+::: {.column-margin .callout-important}
+@zanolla_assessing_2018 didn't directly measure nutrients(?) but found that temperature was highly correlated with species distribution. Check @zanolla_structure_2018 - did they measure nutrients?
+:::
+
+As far as I can tell, no-one has investigated nitrogen uptake directly in _Asparagopsis_ gametophytes. I will therefore be using the uptake rates calculated for the tetrasporophyte.
 
 Some very interesting things from reading @torres_nitrogen_2021:
 
-- Asparagopsis prefers ammonium during the internally-controlled (non-surge) phase
-- Nitrate also taken up, but not preferred - even when nitrate was the only form available uptake was limited (limited use by seaweed)
-- Amino acids (a mix of several different ones, with alanine dominating) were also tested. Amino acids are released by decomposing fish food. I may need to include amino acids as "other N" in the model.
+* Asparagopsis prefers ammonium during the internally-controlled (non-surge) phase
+* Nitrate also taken up, but not preferred - even when nitrate was the only form available uptake was limited (limited use by seaweed)
+* Amino acids (a mix of several different ones, with alanine dominating) were also tested. Amino acids are released by decomposing fish food. I may need to include amino acids as "other N" in the model.
 
 @torres_nitrogen_2021 tested the surge and internally-controlled nitrogen uptake rates of _A. armata_ when given nitrogen in the form of ammonium, nitrate and a mix of amino acids (dominated by alanine). 
 Nitrogen uptake (in all three forms) did not saturate at ~200 $\mu$M concentration, so was was better described with a linear equation rather than with Michaelis-Menton uptake kinetics
@@ -154,55 +157,46 @@ Nitrogen uptake (in all three forms) did not saturate at ~200 $\mu$M concentrati
 
 torresNO3 <- read.csv(file.path("data_raw", "sources", "torres_2021", "tores-2021-Fig2-B.csv"))
 
-C_ni_alone <- set_units(mean(torresNO3$uptake[torresNO3$treatment == "alone"]), "umol gDW-1 h-1")
-C_ni_combo <- set_units(mean(torresNO3$uptake[torresNO3$treatment == "combo"]), "umol gDW-1 h-1")
-N_15 <- set_units(15, g/mol) # Torres 2021 used N-15 only
+remove_unit("molN") # Torres 2021 only used N-15 so need to readjust the units for this data
+install_unit("molN", "15 gN")
+C_ni_alone <- set_units(mean(torresNO3$uptake[torresNO3$treatment == "alone"]), "umolN gDW-1 h-1")
+C_ni_combo <- set_units(mean(torresNO3$uptake[torresNO3$treatment == "combo"]), "umolN gDW-1 h-1")
 ```
 
-@torres_nitrogen_2021 did not calculate a linear uptake rate for nitrate when it was tested alone. They did not offer an explanation beyond the observation that since _A. armata_ did not show an increase in uptake rate with concentration it likely has a limited capacity to use nitrogen. However this does not explain why they provided a slope and constant for linear uptake of nitrate in combination with other N forms, as that also did not show an increase in uptake rate with increasing concentration (although the relationship was not significant). 
+@torres_nitrogen_2021 did not calculate a linear uptake rate for nitrate when it was tested alone - only a constant rate of `r round(C_ni_alone, 2)` (or `r round(set_units(C_ni_alone, "mgN gDW-1 d-1"), 2)`). In combination nitrate was also taken up at a com
+They did not offer an explanation beyond the observation that since _A. armata_ did not show an increase in uptake rate with concentration it likely has a limited capacity to use nitrogen. However this does not explain why they provided a slope and constant for linear uptake of nitrate in combination with other N forms, as that also did not show an increase in uptake rate with increasing concentration (although the relationship was not significant). 
 I have decided to use a constant rate of nitrate uptake independent of concentration.
 
+
 ```{r torres 2021 rates}
-#| code-summary: Calculate uptake rates from data
+#| code-summary: Calculate uptake rates from Torres 2021 data
 
 # From Torres et. al. 2021, Table 3
 M_am_alone <- set_units(0.12, "L h-1 gDW-1") 
-C_am_alone <- set_units(10.45, "umol h-1 gDW-1")
+C_am_alone <- set_units(10.45, "umolN h-1 gDW-1")
 
 M_am_combo <- set_units(0.14, "L h-1 gDW-1")
-C_am_combo <- set_units(8.79, "umol h-1 gDW-1 ")
+C_am_combo <- set_units(8.79, "umolN h-1 gDW-1 ")
 
 M_aa_alone <- set_units(0.007, "L h-1 gDW-1")
-C_aa_alone <- set_units(1.69, "umol h-1 gDW-1 ")
+C_aa_alone <- set_units(1.69, "umolN h-1 gDW-1 ")
 
 M_aa_combo <- set_units(0.006, "L h-1 gDW-1")
-C_aa_combo <- set_units(0.88, "umol h-1 gDW-1")
+C_aa_combo <- set_units(0.88, "umolN h-1 gDW-1")
 
-df <- list(
-  as.data.frame(S_uM) %>% 
-    mutate(alone = lin_uptake(S_uM, M_am_alone, C_am_alone),
-           combo = lin_uptake(S_uM, M_am_combo, C_am_combo),
-           form = "ammonium") %>% 
-    pivot_longer(names_to = "treatment", values_to = "uptake_rate", cols = c(alone, combo)),
-  
-  as.data.frame(S_uM) %>% 
-    mutate(alone = C_ni_alone,
-           combo = C_ni_combo,
-           form = "nitrate") %>% 
-    pivot_longer(names_to = "treatment", values_to = "uptake_rate", cols = c(alone, combo)),
-  
-  as.data.frame(S_uM) %>% 
-    mutate(alone = lin_uptake(S_uM, M_aa_alone, C_aa_alone),
-           combo = lin_uptake(S_uM, M_aa_combo, C_aa_combo),
-           form = "amino acids") %>% 
-    pivot_longer(names_to = "treatment", values_to = "uptake_rate", cols = c(alone, combo))
-)
-
-df <- bind_rows(df) %>% 
-  mutate(form = as.factor(form),
-         treatment = as.factor(treatment),
-         S = set_units(S_uM*N_15, "mg m-3"),
-         uptake_rate = set_units(uptake_rate*N_15, "mg gDW-1 d-1"))
+torres_uptake <- as.data.frame(S_uM) %>% 
+  mutate(ammonium_alone = lin_uptake(S_uM, M_am_alone, C_am_alone),
+         ammonium_combo = lin_uptake(S_uM, M_am_combo, C_am_combo),
+         nitrate_alone = C_ni_alone,
+         nitrate_combo = C_ni_combo,
+         amacids_alone = lin_uptake(S_uM, M_aa_alone, C_aa_alone),
+         amacids_combo = lin_uptake(S_uM, M_aa_combo, C_aa_combo)) %>% 
+  pivot_longer(cols = !contains("S_uM"), 
+               names_to = c("form", "treatment"), names_sep = "_",
+               values_to = "uptake",
+               names_transform = list(form = as.factor, treatment = as.factor)) %>% 
+  mutate(S = set_units(S_uM, "mgN m-3"),
+         uptake = set_units(uptake, "mgN gDW-1 d-1"))
 ```
 
 Ammonium is obviously the preferred form of nitrogen uptake in _A. armata_. Amino acids and nitrate are taken up at approximately the same rate.
@@ -212,49 +206,57 @@ Ammonium is obviously the preferred form of nitrogen uptake in _A. armata_. Amin
 #| fig-cap: |
 #|    Linear uptake of ammonium (green), nitrate (blue) and amino acids (red) by _A. armata_. Dashed black lines show concentrations of 20 $\mu$M and 50 $\mu$M for reference.
 
-int1 <- set_units(20, "umol L-1")
-int2 <- set_units(50, "umol L-1")
+int1 <- 20 %>% set_units("umolN L-1") %>% set_units("mgN m-3")
+int2 <- 50 %>% set_units("umolN L-1") %>% set_units("mgN m-3")
 
-ggplot(df, aes(x = S, y = uptake_rate, colour = form)) +
+ggplot(torres_uptake, aes(x = S, y = uptake, colour = form)) +
   geom_line() +
-  facet_wrap(vars(df$treatment)) +
-  geom_vline(aes(xintercept = set_units(int1, "mg m-3")), linetype = "dashed") +
-  geom_vline(aes(xintercept = set_units(int2, "mg m-3")), linetype = "dashed") +
+  facet_wrap(vars(treatment)) +
+  geom_vline(aes(xintercept = int1), linetype = "dashed") +
+  geom_vline(aes(xintercept = int2), linetype = "dashed") +
   labs(y = "Uptake rate", x = "Substrate concentration") +
-  theme_classic() +
-  theme(legend.position = "none")
+  prettyplot + theme(legend.position = "bottom")
 ```
 
-### Michaelis–Menten uptake {#sec-nitrogen-uptake-tetrasporophyte-MM}
+```{r reset N units}
+#| code-summary: Reset molN back to 14.0067 g after Torres data
+
+remove_unit("molN")
+install_unit("molN", "15 gN")
+```
+
+## Michaelis–Menten uptake {#sec-nitrogen-uptake-MM}
 
 @schuenhoff_tetrasporophyte_2006 fit a Michaelis–Menten curve to their uptake rates. 
-They measured day and night uptake rates separately and combined. Their night and combined measurements were fairly poorly described by a Michaelis–Menten curve (R = 0.189 and 0.21 respectively) but daytime uptake was better (R$^2$ = 0.78). Since the model doesn't have a day-night cycle anyway, I'll be using the daytime parameters only.
+They measured day and night uptake rates separately and combined. Their night and combined measurements were fairly poorly described by a Michaelis–Menten curve (R = 0.189 and 0.21 respectively) but daytime uptake was better (R$^2$ = 0.78). Since the model doesn't have a day-night cycle anyway, I'll be looking at the daytime parameters only.
 
 ```{r schuenhoff MM plot}
 #| code-summary: Plot curves based on Schuenhoff et al. (2006) data
 #| fig-cap: |
 #|    Michaelis–Menten uptake of ammonium by _A. armata_. Dashed black lines show concentrations of 5 $\mu$M, 20 $\mu$M and 50 $\mu$M for reference.
 
-V_am <- set_units(14.85, "umol gDW-1 h-1")
-K_am <- set_units(10.01, "umol L-1")
+V_am <- 14.85 %>% set_units("umolN gDW-1 h-1")
+K_am <- 10.01 %>% set_units("umolN L-1")
 
-df2 <- data.frame(S = S_uM, uptake_rate = MM_uptake(conc = S_uM, V = V_am, K = K_am))
-df2 <- df2 %>% 
-  mutate(S = set_units(S_uM, "mg m-3"),
-         uptake_rate = set_units(uptake_rate, "mg gDW-1 d-1"))
+schuen_uptake <- data.frame(S = S_uM) %>% 
+  mutate(uptake = MM_uptake(conc = S_uM, V = V_am, K = K_am),
+         S = set_units(S_uM, "mgN m-3"),
+         uptake = set_units(uptake, "mgN gDW-1 d-1"),
+         form = factor("ammonium", levels = levels(torres_uptake$form)))
 
-int1 <- set_units(5, "umol L-1")
-int2 <- set_units(20, "umol L-1")
-int3 <- set_units(50, "umol L-1")
+int1 <- 5 %>% set_units("umolN L-1") %>% set_units("mgN m-3")
+int2 <- 20 %>% set_units("umolN L-1") %>% set_units("mgN m-3")
+int3 <- 50 %>% set_units("umolN L-1") %>% set_units("mgN m-3")
 
-ggplot(dplyr::filter(df2, S <= set_units(1000, "mg m-3")), 
-       aes(x = S, y = uptake_rate)) +
+schuen_uptake %>% 
+  filter(S <= set_units(1000, "mgN m-3")) %>% 
+  ggplot(aes(x = S, y = uptake, colour = form)) +
   geom_line() +
-  geom_vline(aes(xintercept = set_units(int1, "mg m-3")), linetype = "dashed") +
-  geom_vline(aes(xintercept = set_units(int2, "mg m-3")), linetype = "dashed") +
-  geom_vline(aes(xintercept = set_units(int3, "mg m-3")), linetype = "dashed") +
+  geom_vline(aes(xintercept = int1), linetype = "dashed") +
+  geom_vline(aes(xintercept = int2), linetype = "dashed") +
+  geom_vline(aes(xintercept = int3), linetype = "dashed") +
   labs(y = "Uptake rate", x = "Substrate concentration") +
-  theme_classic()
+  theme_classic() + theme(legend.position = "bottom")
 ```
 
 It's immediately obvious that even though ammonium uptake by MM kinetics increases quickly at low concentrations, the linear uptake rate calculated by @torres_nitrogen_2021 is higher than the MM uptake rate calculated by @schuenhoff_tetrasporophyte_2006, especially at low (5 $\mu$M) and very high (50 $\mu$M) concentrations. 
@@ -262,216 +264,254 @@ It's immediately obvious that even though ammonium uptake by MM kinetics increas
 ```{r both uptake plot}
 #| code-summary: Compare Michaelis–Menten uptake with linear uptake of ammonium
 #| fig-cap: |
-#|    Uptake of ammonium by _A. armata_ via Michaelis–Menten kinetics (blue) or a linear rate (red) with increasing substrate concentration (maximum of 30$\mu$M). Dashed lines show reference concentrations of 5, 20 and 50 $\mu$M for reference.
+#|    Uptake of ammonium by _A. armata_ via Michaelis–Menten kinetics (blue) or a linear rate (red) with increasing substrate concentration (maximum of 30$\mu$M). Dotted lines show reference concentrations of 5, 20 and 50 $\mu$M for reference.
 
-both <- data.frame(S = set_units(seq(0, 55, 0.5), "umol L-1"))
-both <- both %>% 
-  mutate(MicMen = MM_uptake(S, V_am, K_am),
-         linear = lin_uptake(S, M_am_combo, C_am_combo)) %>% 
-  pivot_longer(names_to = "shape", values_to = "uptake_rate", cols = c(MicMen, linear)) %>% 
-  mutate(S = set_units(S, "mg m-3"),
-         uptake_rate = set_units(uptake_rate, "mg gDW-1 d-1"))
+both_uptake <- merge(torres_uptake, schuen_uptake, by = c("S", "form"), all = T) %>% 
+  rename(torres = uptake.x, schuenhoff = uptake.y) %>% 
+  pivot_longer(names_to = "source", values_to = "uptake", cols = c(torres, schuenhoff), 
+               names_transform = list(source = as.factor))
 
-ggplot(both, aes(x = S, y = uptake_rate, color = shape)) +
-  geom_line() +
-  geom_vline(aes(xintercept = set_units(int1, "mg m-3")), linetype = "dashed") +
-  geom_vline(aes(xintercept = set_units(int2, "mg m-3")), linetype = "dashed") +
-  geom_vline(aes(xintercept = set_units(int3, "mg m-3")), linetype = "dashed") +
+both_uptake %>% 
+  filter(S_uM <= set_units(55, "umolN L-1")) %>% 
+  ggplot(aes(x = S, y = uptake, color = form, linetype = source)) +
+  geom_line(linewidth = 0.75) +
+  facet_wrap(vars(treatment)) +
+  geom_vline(aes(xintercept = int1), linetype = "dotted") +
+  geom_vline(aes(xintercept = int2), linetype = "dotted") +
+  geom_vline(aes(xintercept = int3), linetype = "dotted") +
   labs(y = "Uptake rate", x = "Substrate concentration") +
-  theme_classic() +
-  theme(legend.position = "none")
+  prettyplot + theme(legend.position = "bottom")
 ```
 
-```{r convert units tetrasporophyte}
-#| code-summary: Convert units of N uptake parameters
+```{r set uptake params}
+#| code-summary: Choose which params of those investigated will make it into the model
 
-V_am <- drop_units(set_units(V_am, "mg gDW-1 d-1"))
-K_am <- drop_units(set_units(K_am, "mg m-3"))
+V_am <- V_am # From Schuenhoff
+K_am <- K_am # From Schuenhoff
 
-M_am <- drop_units(set_units(M_am_combo, "m3 gDW-1 d-1"))
-C_am <- drop_units(set_units(C_am_combo, "mg gDW-1 d-1"))
+M_am <- M_am_combo # From Torres
+C_am <- C_am_combo # From Torres
 
-M_ni <- 0
-C_ni <- drop_units(set_units(C_ni_combo, "mg gDW-1 d-1"))
+M_ni <- 0 # From Torres (constant uptake)
+C_ni <- C_ni_combo # From Torres
 
-M_ot <- drop_units(set_units(M_aa_combo, "m3 gDW-1 d-1"))
-C_ot <- drop_units(set_units(C_aa_combo, "mg gDW-1 d-1"))
+M_ot <- M_aa_combo # From Torres
+C_ot <- M_aa_combo # From Torres
 ```
 
-## Internal nutrient state {#sec-internal-nitrogen-tetrasporophyte}
-### Nitrogen concentration {#sec-nitrogen-concentration-tetrasporophyte}
+# Internal nutrient state {#sec-internal-nitrogen}
+## Tissue nitrogen concentration {#sec-tissue-nitrogen}
 
-The model requires minimum and maximum internal nitrogen concentrations, so I'll be taking the lowest and highest concentrations I can find.
+The model requires minimum and maximum internal nitrogen concentrations. There are a couple of ways to go about estimating these:
+
+* Take the lowest and highest N-concentrations I can find in the literature
+* Take the lowest and highest protein concentrations I can find in the literature, and convert these into nitrogen. Protein estimates are much easier to find than N-concentration estimates, but the conversion to nitrogen adds uncertainty. 
+
+### Direct search
 
 @mata_direct_2010 reported that _A. armata_'s N-content was 6.04% of DW at harvesting in December, up from 5.90% at the time of stocking (or 5.56% up to 5.62% in May). 
 
-```{r mata 2010 fig 1 and 2}
+```{r mata 2010 fig 1 and 2 data}
 #| code-summary: Clean up data from @mata_direct_2010
 
-matadata <- read.csv(file.path("data_raw", "sources", "mata_2010", "wpd_datasets.csv"))
-ls <- split.default(matadata, rep(1:12, each = 2))
-for (i in 1:length(ls)){
-  ls[[i]] <- ls[[i]] %>% 
-    mutate(dataset = colnames(ls[[i]][1]))
-  colnames(ls[[i]]) <- c("X", "Y", "dataset")
-  ls[[i]] <- ls[[i]] %>% 
-    dplyr::filter(X != "X") %>% 
-    mutate(X = as.numeric(X),
-           Y = as.numeric(Y))
-}
+# Data from Figure 1
+mata_data_Y <- read.csv(file.path("data_raw", "sources", "mata_2010", "figure_1.csv")) %>% 
+  rename(biomass_yield = `Biomass.yield.gDW.m.2.d.1`,
+         TAN_flux = `Weekly.average.TAN.flux.umol.L.1.h.1`) %>% 
+  mutate(biomass_yield = biomass_yield %>% set_units("gDW m-2 d-1"),
+         TAN_flux = TAN_flux %>% set_units("umolN L-1 h-1"),
+         species = as.factor(species),
+         month = as.factor(month))
 
-mata.N <- list(ls[[2]], ls[[3]], ls[[4]], ls[[5]], ls[[9]], ls[[10]], ls[[11]], ls[[12]])
-mata.N <- bind_rows(mata.N) %>% 
-  mutate(species = case_when(str_detect(dataset, pattern = "U..rigidia") ~ "U. rigidia", TRUE ~ "A. armata"),
-         measure = case_when(str_detect(dataset, pattern = "N.removal") ~ "N removal", TRUE ~ "N yield"),
-         month = case_when(str_detect(dataset, pattern = "May") ~ "May", TRUE ~ "Dec"),
-         TAN_flux = X, # umol L-1 hr-1
-         Biofiltration = Y # gDW m-2 d-1
-         ) %>% 
-  dplyr::select(-c(X, Y, dataset))
+# Data from Figure 2
+mata_data_N <- read.csv(file.path("data_raw", "sources", "mata_2010", "figure_2.csv")) %>% 
+  rename(biofiltration = `Biofiltration..g.N.m.2.d.1.`,
+         TAN_flux = `Weekly.average.TAN.flux.umol.L.1.h.1`) %>% 
+  mutate(biofiltration = biofiltration %>% set_units("gN m-2 d-1"),
+         TAN_flux = TAN_flux %>% set_units("umolN L-1 h-1"),
+         measure = as.factor(measure),
+         species = as.factor(species),
+         month = as.factor(month)) %>% 
+  pivot_wider(names_from = measure, values_from = biofiltration)
 
-mata.Y <- list(ls[[1]], ls[[6]], ls[[7]], ls[[8]])
-mata.Y <- bind_rows(mata.Y) %>% 
-  mutate(species = case_when(str_detect(dataset, pattern = "U..rigidia") ~ "U. rigidia", TRUE ~ "A. armata"),
-         month = case_when(str_detect(dataset, pattern = "May") ~ "May", TRUE ~ "Dec"),
-         TAN_flux = X, # umol L-1 hr-1
-         Biomass_yield = Y # gDW m-2 d-1
-         ) %>% 
-  dplyr::select(-c(X, Y, dataset))
-
-save(mata.N, file = file.path("data_raw", "sources", "mata_2010", "mata.N.rda"))
-save(mata.Y, file = file.path("data_raw", "sources", "mata_2010", "mata.Y.rda"))
-rm(ls)
+# Plot data just to check it matches Mata 2010 - it does
+# ggplot(data = filter(mata_data_Y, species == "A. armata"), 
+#        aes(x = TAN_flux, y = biomass_yield, colour = month)) +
+#   geom_point() 
+# ggplot(data = filter(mata_data_N, species == "A. armata"), 
+#        aes(x = TAN_flux, y = N_yield, colour = month)) +
+#   geom_point() 
 ```
 
-Using a MM curve (V = Vmax/(Ks + [S])) @mata_direct_2010 estimated a maximum N-yield of 9.5 g N m-2 d-1 for _A. armata_ in May, and a maximum biomass yield of 153.6 g DW m-2 d-1. This gives a maximum N-content of 6.18%. The minimum N% recorded in their study (at stocking) was 5.56% $\pm$ 0.13%.
+```{r mata 2010 fig 1 and 2 parameters}
+#| code-summary: Create curves from @mata_direct_2010 parameters
 
-@schuenhoff_tetrasporophyte_2006 found that C- and N-content of their tank-grown _A. armata_ remained consistent regardless of available TAN (minimum 0, maximum 400 $\mu$mol l$^{-1}$ h$^{-1}$). 
-<!-- This doesn't give minimum and maximum values but do help calculate mg N from @schuenhoff_tetrasporophyte_2006's data. -->
+# Parameters from Figure 1 (May)
+biom_Y_Vmax <- 153.6 %>% set_units("gDW m-2 d-1") # this is per m2 of a tank with SA=0.23m2
+biom_Y_Ks <- 48.4 %>% set_units("umolN L-1 h-1")
+biom_Y <- data.frame(flux = seq(0, 2000)) %>% 
+  mutate(flux = flux %>% set_units("umolN L-1 h-1"),
+         biom_yield = MM_uptake(flux, V = biom_Y_Vmax, K = biom_Y_Ks))
 
-```{r internal N tetrasporophyte}
-#| code-summary: Minimum and maximum N composition
+# Parameters from Figure 2 (May, N-yield)
+N_Y_Vmax <- 9.5 %>% set_units("gDW m-2 d-1")
+N_Y_Ks <- 60.3 %>% set_units("umolN L-1 h-1")
+N_Y <- data.frame(flux = seq(0, 200)) %>% 
+  mutate(flux = flux %>% set_units("umolN L-1 h-1"),
+         N_yield = MM_uptake(flux, V = N_Y_Vmax, K = N_Y_Ks))
 
-N_min <- set_units(0.056-0.0013, "g gDW-1") # Mata
-Q_min <- set_units(N_min, "mg gDW-1")
-N_max <- set_units(0.065, "g gDW-1") # Shuenhoff
-Q_max <- set_units(N_max, "mg gDW-1")
+# Plot data just to check it matches Mata 2010 - it does
+# ggplot(data = N_Y, aes(x = flux, y = N_yield)) +
+#   geom_line() + prettyplot
+# ggplot(data = biom_Y, aes(x = flux, y = biom_yield)) +
+#   geom_line() + prettyplot
+
+N_biom <- merge(biom_Y, N_Y, by = "flux") %>% 
+  mutate(N_biom = N_yield/biom_yield)
+
+# ggplot(N_biom, aes(x = biom_yield, y = N_biom)) +
+#   geom_point()
+
+max_N_biom <- max(N_biom$N_biom, na.rm = T)
+min_N_biom <- min(N_biom$N_biom, na.rm = T)
 ```
 
-This gives a $Q_{min}$ of `r round(Q_min, 2)` mg gDW$^{-1}$ and a $Q_{max}$ of `r round(Q_max, 2)` mg gDW$^{-1}$. This is a very narrow range.
+<!-- Using the parameters from @mata_direct_2010, I estimate a maximum N-content of `r round(max_N_biom*100,2)`% and a minimum N-content of `r round(min_N_biom*100,2)`%. -->
 
-```{r mata 2010 yield data}
-#| eval: false
+@mata_direct_2010 reported that the maximum N-content of _A. armata_ in their study was 6.18%, and the minimum (at stocking, not starved) was 5.56% $\pm$ 0.13%. @schuenhoff_tetrasporophyte_2006 reported a maximum N-content of 6.5% and found that the C- and N-content of their tank-grown _A. armata_ remained consistent regardless of available TAN (TAN range 0-400 $\mu$mol l$^{-1}$ h$^{-1}$).
 
-mata <- data.frame(x1=c('A. armata', 110, 5, 14.2, 4.1, 71,72, 2.8, 3.2,4.2, 4.1,'This study'),
-                   x2=c('U. rigida', 110, 4, 14.2, 4.1, 44,51.7, 2.7, 2.9,2.7,3.2, 'This study'),
-                   x3=c('A. armata', 110, 5, 21.5, 3.8, 125,153, 6.5, 8.2,7.4,9.5, 'This study'),
-                   x4=c('U. rigida', 110, 4, 21.5, 3.8, 73, 72.2, 5.1, 6.4, 3.6, 3.9, 'This study'),
-                   x5=c('U. lactuca', 600, 1.7, 20, 0.5, 55,60.3,3.2,5.6,2.3,NA, 'Cohen and Neori 1991; Neori et al. 1991'),
-                   x6=c('U. rigida', 750, 2.5, 24, 0.5, 40,NA, 2,2.3,1.8,NA,'Jimenez del Rio et al. 1994, 1996'),
-                   x7=c('U. rigida', 1900, 2, 22, 0.6, 48,47.9,1.31,3.1,1.45,NA, 'Mata and Santos 2003'))
+### Protein conversion
 
-mata <- data.frame(t(mata))
+Maximum (or, at least, very high) internal nitrogen concentrations for _Asparagopsis_ are fairly easy to find. _A. taxiformis_ had a protein content of 22.69 %DM in @nunes_evaluation_2024 and 23.76 %DM in @pacheco_invasive_2020. @nunes_evaluation_2024 also found that _A. armata_ had a protein concentration of 24.23 %DM. However, the _A. taxiformis_ spp. gametophytes eaten in Hawaii have also been reported having protein concentrations <10 %DW [@mcdermid_nutritional_2003], and all of these measurements came from the invasive range of _Asparagopsis_.
 
-colnames(mata) <- c("Species", 
-         "Tank_vol_L", 
-         "Stocking_density_g.FW.L−1", 
-         "Mean_water_temp_C", 
-         "Max_water_exchange_vol.h−1", 
-         "Max_biomass_yield_g.DW.m−2.d−1", 
-         "Est_max_biomass_yield_g.DW.m−2.d−1", 
-         "TAN_removal_g.m−2.d−1", 
-         "Est_max_TAN_removal_g.m−2.d−1",
-         "N_yield_g.m−2.d−1", 
-         "Est_max_N_yield_g.m−2.d−1",
-         "Reference")
+Samples of _A. armata_ collected from New Zealand showed a protein concentrations ranging from of 10.94 to 15.2 %DW [@mihaila_new_2022; @zemke-white_chlorophyte_1999], while Australian samples of _A. taxiformis_ had mean a protein concentration of 18.2 %DW [@brooke_methane_2020]. 
 
-mata <- mata %>% 
-  mutate(Tank_vol = set_units(as.numeric(Tank_vol_L), "L"),
-         Stocking_density = set_units(as.numeric(`Stocking_density_g.FW.L−1`), "gFW L-1"),
-         Mean_water_temp = set_units(as.numeric(Mean_water_temp_C), "C"),
-         Max_water_exchange_vol = set_units(as.numeric(`Max_water_exchange_vol.h−1`), "h-1"),
-         Max_biomass_yield = set_units(as.numeric(`Max_biomass_yield_g.DW.m−2.d−1`), "gDW m-2 d-1"),
-         Est_max_biomass_yield = set_units(as.numeric(`Est_max_biomass_yield_g.DW.m−2.d−1`), "gDW m-2 d-1"),
-         TAN_removal = set_units(as.numeric(`TAN_removal_g.m−2.d−1`), "g m-2 d-1"),
-         Est_max_TAN_removal = set_units(as.numeric(`Est_max_TAN_removal_g.m−2.d−1`), "g m-2 d-1"),
-         N_yield = set_units(as.numeric(`N_yield_g.m−2.d−1`), "g m-2 d-1"),
-         Est_max_N_yield = set_units(as.numeric(`Est_max_N_yield_g.m−2.d−1`), "g m-2 d-1")
-  ) %>% 
-  select(-c(Tank_vol_L,`Stocking_density_g.FW.L−1`,Mean_water_temp_C,`Max_water_exchange_vol.h−1`,`Max_biomass_yield_g.DW.m−2.d−1`,`TAN_removal_g.m−2.d−1`,`Est_max_N_yield_g.m−2.d−1`,`Est_max_TAN_removal_g.m−2.d−1`,`Est_max_biomass_yield_g.DW.m−2.d−1`,`N_yield_g.m−2.d−1`))
+```{r internal N gametophyte}
+#| code-summary: Range of protein concentrations
+
+P_range_taxi <- sort(c(22.69, 23.76, 18.2, 7.5)) # Asparagopsis taxiformis
+P_range_arma <- sort(c(24.23, 15.2, 10.94)) # Asparagopsis armata
+
+N_conv_aspara <- 5.63
+N_range_taxi_aspara <- P_range_taxi/N_conv_aspara # Asparagopsis taxiformis
+N_range_arma_aspara <- P_range_arma/N_conv_aspara # Asparagopsis armata
+
+N_conv_reds <- 5.1
+N_range_taxi_reds <- P_range_taxi/N_conv_reds # Asparagopsis taxiformis
+N_range_arma_reds <- P_range_arma/N_conv_reds # Asparagopsis armata
 ```
 
-C% of tissue is not currently used within the model but might be useful later.
+There are two observations made from this. First, _A. armata_ appears to have a slightly higher average protein concentration than _A. taxiformis_, although this might be due to small sample sizes and a lack of direct comparison. Second, the samples collected from Australia and New Zealand had a much lower protein concentration than those collected elsewhere [@nunes_evaluation_2024; @mihaila_new_2022], possibly reflecting the region's naturally low nitrogen levels. 
+Luckily, these results can still be useful as there appear to be no significant differences between the protein content of cultured and wild macroalgae, so intra-species variation is probably the largest factor determining the protein content of most macroalgae [@angell_protein_2016]. 
 
-```{r schuenhoff composition}
-#| code-summary: Get Schuenhoff et al. (2006) compositional data
+There are also different possible ways of converting protein to nitrogen: @angell_protein_2016 suggested that a factor `r N_conv_reds` is most appropriate for red algae, although they also reported _Asparagopsis_ specifically having a conversion factor of `r N_conv_aspara` which was used by @mihaila_new_2022 in their calculations. The results of these conversions are summarised in @tbl-protein-conversions.
 
-N_perc <- set_units(0.065, "g gDW-1")
-C_perc <- set_units(0.355, "g gDW-1")
+| Species | Stat | Protein % | N (reds) | N (_Asparagopsis_)
+|:-----:|:-----:|:-----:|:-----:|:-----:|
+|                 | Mean | `r round(mean(P_range_arma),2)` | `r round(mean(N_range_arma_reds),2)` | `r round(mean(N_range_arma_aspara),2)` |
+| _A. armata_     | Min  | `r round(min(P_range_arma),2)`  | `r round(min(N_range_arma_reds),2)`  | `r round(min(N_range_arma_aspara),2)`  |
+|                 | Max  | `r round(max(P_range_arma),2)`  | `r round(max(N_range_arma_reds),2)`  | `r round(max(N_range_arma_aspara),2)`  |
+|                 | Mean | `r round(mean(P_range_taxi),2)` | `r round(mean(N_range_taxi_reds),2)` | `r round(mean(N_range_arma_reds),2)`   |
+| _A. taxiformis_ | Min  | `r round(min(P_range_taxi),2)`  | `r round(min(N_range_taxi_reds),2)`  | `r round(min(N_range_arma_reds),2)`    |
+|                 | Max  | `r round(max(P_range_taxi),2)`  | `r round(max(N_range_taxi_reds),2)`  | `r round(max(N_range_arma_reds),2)`    |
+: Observed protein concentrations in _Asparagopsis_ species {#tbl-protein-conversions}
+
+```{r set Q_min and Q_max params}
+#| code-summary: Choose which params of those investigated will make it into the model
+
+N_min <- set_units(min(P_range_arma)/N_conv_aspara, "gN gDW-1")
+Q_min <- drop_units(set_units(N_min, "mgN gDW-1"))
+N_max <- set_units(0.065, "gN gDW-1") # Schuenhoff 2006
+Q_max <- drop_units(set_units(N_max, "mgN gDW-1"))
 ```
 
-## Salinity {#sec-salinity-tetrasporophyte}
+This gives a minimum N of `r round(N_min,2)`% (a $Q_{min}$ of `r round(Q_min, 2)` mg gDW$^{-1}$) and a maximum N-content of `r round(N_max,2)`% (a $Q_{max}$ of `r round(Q_max, 2)` mg gDW$^{-1}$), which is a relatively high value for macroalgae.
 
-Not much is known about how _Asparagopsis_ responds to salinity, but it is thought to be fairly intolerant of low salinity (Camille White, pers. comm.). 
-<!-- Camille reckons salinity is a must, and that _A. armata_ has a minimum salinity tolerance of ~34ppm. -->
-Mean salinity in most Tasmanian coastal waters is fairly consistent at ~35.25 PSU, so I'm going to set that as the optimum for both species. 
+# Biomass factors
+## Dry weight to fresh weight {#sec-dry-weight}
 
-```{r salinity}
-#| code-summary: Show salinity parameters
+* @schuenhoff_tetrasporophyte_2006 found that the DW:FW ratio of _A. armata_ remained constant at 0.25 $\pm$ 0.001 (mean $\pm$ SD) regardless of season or stocking density (tetrasporophytes sourced from southern Portugal, tank-grown in fish farm effluent at a water exchange rate of 2 Vol hr$^{-1}$). 
+* @sainz-villegas_exploring_2024 measured the change from FW to DW as 0.12.
+* @nunes_evaluation_2024 found a dry mass of 6.55 $\pm$ 1.25% for _A. taxiformis_ gametophytes and 7.68 $\pm$ 1.07% for _A. armata_ gametophytes, and reported that similar values were found by @roque_effect_2019. 
 
-S_opt <- 35.25 
-S_min <- 21.15 # ecklonia minimum is 80% of mean below mean. This is 40% of mean below mean.
-S_max <- 41.65 # ecklonia minimum is 36% of mean below mean. This is 18% of mean below mean.
-sal <- seq(0,50,0.5)
-Slim <- sapply(X = sal, FUN = T_lim, spec_params = c(T_opt = S_opt, T_min = S_min, T_max = S_max))
-ggplot(mapping = aes(x = sal, y = Slim)) +
-  geom_line(size = 1) +
-  theme_classic() +
-  theme(legend.position = "none", element_text(family = "sans", colour = "black", size = 11),
-        axis.title.y = element_text(vjust = 2)) +
-  labs(x = expression("Salinity (g L"^-1*")"), y = "Relative growth") +
-  scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0,1)) +
-  scale_x_continuous(breaks = seq(33, 37, 0.5))
-```
+```{r fresh to dry biomass}
+#| code-summary: Summarise possible DWWW values
 
-## Biomass factors
-### Dry weight to fresh weight {#sec-dry-weight-tetrasporophyte}
-
-@schuenhoff_tetrasporophyte_2006 found that the DW:FW ratio of _A. armata_ remained constant at 0.25 $\pm$ 0.001 (mean $\pm$ SD) regardless of season or stocking density (tetrasporophytes sourced from southern Portugal, tank-grown in fish farm effluent at a water exchange rate of 2 Vol hr$^{-1}$). 
-
-```{r schuenhoff fresh biomass}
-#| code-summary: Set DWWW units based on @schuenhoff_tetrasporophyte_2006
-
+# schuenhoff_tetrasporophyte_2006
 remove_unit("gWW")
 install_unit("gWW", "0.25 gDW")
-DWWW <- set_units(1, "gDW") %>% 
-  set_units("gWW") %>% 
-  drop_units()
+DWWW_schuen <- set_units(1, "gDW") %>% set_units("gWW")
 
+# sainz-villegas_exploring_2024
 remove_unit("gWW")
 install_unit("gWW", "0.12 gDW")
-DWWW2 <- set_units(1, "gDW") %>% 
-  set_units("gWW") %>% 
-  drop_units()
+DWWW_sainz <- set_units(1, "gDW") %>% set_units("gWW")
+
+# nunes_evaluation_2024/roque_effect_2019
+remove_unit("gWW")
+install_unit("gWW", "0.1302083 gDW") # 1/7.68
+DWWW_nunes_arma <- set_units(1, "gDW") %>% set_units("gWW")
+remove_unit("gWW")
+install_unit("gWW", "0.1526718 gDW") # 1/6.55
+DWWW_nunes_taxi <- set_units(1, "gDW") %>% set_units("gWW")
 ```
 
-By contrast, @sainz-villegas_exploring_2024 measured the change from FW to DW as 0.12, which would give a $DWWW$ value of `r round(DWWW2, 2)`.
+These options give DW:WW values of `r round(DWWW_schuen,2)`, `r round(DWWW_sainz,2)`, or `r round(DWWW_nunes_arma,2)` for _A. armata_ and `r round(DWWW_nunes_taxi,2)` (_A. taxiformis_). However, only @nunes_evaluation_2024 specifically looked at the gametophyte. 
 
-### Height
+```{r set DWWW param}
+#| code-summary: Choose which params of those investigated will make it into the model
 
-The tetrasporophyte of _Asparagopsis_ is very small and has a consistent pom-pom structure. 
-How this manifests will be dictated by culturing setup, if this is the cultured stage. 
-
-```{r}
-#| code-summary: Set some default height values
-
-h_a <- NA
-h_b <- NA
-h_c <- NA
-h_max <- 1
+DWWW_arma <- DWWW_nunes_arma
+DWWW_taxi <- DWWW_nunes_taxi
 ```
 
-### Growth rate, stocking density
+## Height {#sec-height}
+
+Within the model, "height" does not indicate height exactly, rather it indicates how much of the available space is being taken up by the macroalgae. This combines with density (mg m$^{-3}$, i.e. growth) to indicate how much light and nutrients the macroalgae has access to. For example:
+
+- a macroalgae with a high growth rate but a low height-increase rate (e.g. an _Asparagopsis_ tetrasporophyte) will be more dense in a smaller volume, potentially having higher self-shading rates and decreased access to nutrients
+- a macroalgae with a low growth rate and a high height-increase rate (e.g. _Ecklonia_) will be less dense in a larger volume, potentially lower self-shading rates and increased access to nutrients
+
+@zanolla_size_2018 reported that _A, taxiformis_ gametophyte branches had a maximum length of ~26 cm at ~115 g DW m$^{-2}$. 
+
+```{r calculating height}
+#| code-summary: Height stats from @zanolla_size_2018
+
+sizedis <- set_units(115,"gDW m-2")*set_units(0.26,"m-1")
+sizedisN <- set_units(drop_units(sizedis*0.06), "g m-3")
+sizedisN <- set_units(sizedisN, "mg m-3")
+
+sizedis2 <- set_units(115,"gDW m-2")*set_units(0.26,"m-1")
+sizedisN2 <- set_units(drop_units(sizedis2*0.06), "g m-3")
+sizedisN2 <- set_units(sizedisN2, "mg m-3")/10
+```
+
+This is equivalent to approximately `r sizedis` g DW m$^{-3}$ for a single plant to reach maximum height, or about `r sizedisN` g N mg$^{-3}$. 
+@zanolla_size_2018 found that smaller size classes were more abundant than higher classes, indicating that the gametophyte prioritises new shoots (lateral growth) over increasing height (vertical growth). 
+If we assume that 5 plants are growing within 1 m$^{-3}$, then the maximum height will be reached much earlier, at `r sizedisN2` g N mg$^{-3}$.
+
+```{r fig-height}
+#| code-summary: Create a realistic height curve
+#| fig-cap: |
+#|    Algae height with Nf using spec_params = c(h_a = 3850, h_b = 1.75, h_c = 0.001, h_max = 0.26). The dashed line shows the point at which max height is reached (1794 g N m$^{-3}$)
+
+h_a <- drop_units(sizedisN)
+h_b <- 1.5
+h_c <- 0.01
+h_max <- 0.26
+
+dens <- seq(10, drop_units(sizedisN)+500, 10)
+h <- sapply(X = dens, FUN = algae_height, spec_params = c(h_a = h_a, h_b = h_b, h_c = h_c, h_max = h_max))
+height <- data.frame(dens = set_units(dens, "mg m-3"), h = set_units(h, "m"))
+
+ggplot(height) +
+  geom_line(aes(x = dens, y = h)) +
+  geom_vline(xintercept = sizedisN, linetype = "dashed") +
+  prettyplot +
+  labs(x = "Nf", y = "Height")
+```
+
+## Growth rate & stocking density
 
 @schuenhoff_tetrasporophyte_2006 investigated the optimal stocking density for _A. armata_ in spring and winter at a high water exchange rate (2 Vol hr$^{-1}$). Yield was determined via:
 
@@ -483,26 +523,34 @@ The area of each tank was 0.23 m$^{-2}$ (with a depth of 0.48 m).
 
 Maximum yields in @schuenhoff_tetrasporophyte_2006 in both seasons was achieved at a stocking density of 5 g FW l$^{-1}$, but the yield in spring was higher than in winter (~700 vs ~520 g DW m$^{-2}$ week$^{-1}$). These can be converted to mg N m$^{-2}$ d$^{-1}$:
 
+```{r schuenhoff composition}
+#| code-summary: C:N ratio (or C% of tissue) is not currently used within the model but might be useful later
+#| eval: true
+```
+
 ```{r schuenhoff-2006-Fig1}
-#| code-summary: Get Schuenhoff et al. (2006) starting condition and yield data
+#| code-summary: Get @schuenhoff_tetrasporophyte_2006 starting condition and yield data
 
 spring <- read.csv(file.path("data_raw", "sources", "schuenhoff_2006", "schuenhoff_2006_Fig1_spring-data.csv"), header = F) %>%
   mutate(season = "spring")
 winter <- read.csv(file.path("data_raw", "sources", "schuenhoff_2006", "schuenhoff_2006_Fig1_winter-data.csv"), header = F) %>%
   mutate(season = "winter")
 
+N_perc <- set_units(0.065, "gN gDW-1")
+C_perc <- set_units(0.355, "gN gDW-1")
+
 # initial starting value
 stock_dens <- set_units(5, "gWW L-1")
 stock_dens <- set_units(stock_dens, "gDW m-3")
-stock_dens <- set_units(stock_dens*N_perc, "mg m-3")
+stock_dens <- set_units(stock_dens*N_perc, "mgN m-3")
 
 yield_spring <- set_units(700, "gDW m-2 week-1")
 yield_spring <- yield_spring/set_units(0.48, "m")
-yield_spring <- set_units(yield_spring*N_perc, "mg m-3 d-1")
+yield_spring <- set_units(yield_spring*N_perc, "mgN m-3 d-1")
 
 yield_winter <- set_units(520, "gDW m-2 week-1")
 yield_winter <- yield_winter/set_units(0.48, "m")
-yield_winter <- set_units(yield_winter*N_perc, "mg m-3 d-1")
+yield_winter <- set_units(yield_winter*N_perc, "mgN m-3 d-1")
 
 max_growth <- c(spring = yield_spring/stock_dens, winter = yield_winter/stock_dens)
 mu <- drop_units(max(max_growth))
@@ -510,7 +558,28 @@ mu <- drop_units(max(max_growth))
 
 The maximum growth rate ($\mu$) for _A. armata_ reported in @schuenhoff_tetrasporophyte_2006 was `r round(100*max_growth['spring'], 2)`% in spring and `r round(100*max_growth['winter'], 2)`% in winter. Hard to know if these are being limited by factors other than temperature/light, so I am going to use the maximum $\mu=$`r 100*mu`% for growth in all seasons.
 
-## Temperature response {#sec-temperature-tetrasporophyte}
+# Salinity {#sec-salinity}
+
+Not much is known about how _Asparagopsis_ responds to salinity, but it is thought to be fairly intolerant of low salinity (Camille White, pers. comm.). Mean salinity in most Tasmanian coastal waters is fairly consistent at ~35.25 PSU, so I'm going to set that as the optimum for both species. 
+
+```{r salinity parameters}
+#| code-summary: Estimate salinity parameters
+
+S_opt <- set_units(35.25, "g L-1") 
+S_min <- set_units(21.15, "g L-1")  # ecklonia minimum is 80% of mean below mean. This is 40% of mean below mean.
+S_max <- set_units(41.65, "g L-1")  # ecklonia minimum is 36% of mean below mean. This is 18% of mean below mean.
+sal <- seq(0,50,0.5) %>% set_units("g L-1")
+Slim <- sapply(X = sal, FUN = T_lim, spec_params = c(T_opt = S_opt, T_min = S_min, T_max = S_max))
+
+ggplot(mapping = aes(x = sal, y = Slim)) +
+  geom_line(size = 1) +
+  theme_classic() +
+  theme(legend.position = "none", element_text(family = "sans", colour = "black", size = 11),
+        axis.title.y = element_text(vjust = 2)) +
+  labs(x = expression("Salinity"), y = "Relative growth")
+```
+
+# Temperature response {#sec-temperature-tetrasporophyte}
 
 Previous studies on the temperature tolerance of _Asparagopsis_ tetrasporophytes were reviewed by @zanolla_concise_2022, and @chualain_invasive_2004 collated previous studies' observations on growth minima and maxima. They found that _A. armata_ had a minimum growth temperature of 5-7$^\circ$, an optimum growth temperature of 15 or 20$^\circ$, and a maximum growth temperature of 25$^\circ$C. However, it should be noted that within @chualain_invasive_2004 the only sample collected from Australia (Sorrento Back Beach, Victoria, from the lower eulittoral zone) had an optimum growth temperature of 15$^\circ$C. 
 
@@ -598,7 +667,7 @@ It seems that _A. taxiformis_ has a slightly higher optimum temperature than _A.
 * @mata_effects_2006 found that net growth was significantly decreased above 29$^\circ$C due to an increase in respiration
 * @mata_within-species_2017 investigated temperature limits of _A. taxiformis_, but like @zanolla_photosynthetic_2015 they didn't actually do a full temperature range experiment and only tested three temperatures. Still, growth was best at 20.2$^\circ$C. 
 
-## Light response {#sec-light-tetrasporophyte}
+# Light response {#sec-light-tetrasporophyte}
 
 @figueroa_use_2006 grew _A. armata_ in fish pond effluent and measured $K_d$ at different macroalgae densities. From this I can work out an $a_cs$ (self-shading) value. 
 
@@ -623,13 +692,13 @@ cond <- data.frame(E_0 = c(2112, 2112, 2112, 2112), # umol photons m-2 s-1
 
 cond$Kd <- sapply(X = cond$E_1, FUN = get_Kd, E0 = 2112, z1 = -0.1, z0 = 0) * -1
 cond$Kma <- cond$Kd - cond$Kd[cond$dens == 0]
-cond$dens.DW <- set_units(cond$dens*DWWW, "gDW L-1") # g WW L-1
+cond$dens.DW <- set_units(cond$dens*drop_units(DWWW), "gDW L-1") # g WW L-1
 
 # Figueroa 2006 did not measure N percentage, but we can take a minimum and maximum of 0.055 and 0.065 for starters
 cond$dens.N.hi <- cond$dens.DW * N_perc
-cond$dens.N.lo <- cond$dens.DW * set_units(N_min, "g gDW-1")
-cond$dens.N.hi <- set_units(cond$dens.N.hi, "mg m-3")
-cond$dens.N.lo <- set_units(cond$dens.N.lo, "mg m-3")
+cond$dens.N.lo <- cond$dens.DW * set_units(N_min, "gN gDW-1")
+cond$dens.N.hi <- set_units(cond$dens.N.hi, "mgN m-3")
+cond$dens.N.lo <- set_units(cond$dens.N.lo, "mgN m-3")
 
 # Within the model, k_ma = Nf * h_m * a_cs * max(h_m/d_top, 1) * 1/(min(h_m, d_top)), d_top =/= 0
 # Assuming a maximum height of 26cm because the algae are so dense
@@ -701,9 +770,9 @@ Using $I_o=150$ in the $I_{lim}$ function while trying to approximate the cultur
 #| code-summary: Add an $I_{lim}$ function to plot of temperature/irradiance data from @zanolla_photosynthetic_2015 Figure 1
 
 # Convert density to N
-dens.1 <- set_units(0.04/DWWW, "gDW L-1") # Zanolla tested 1 individual in lab settings
+dens.1 <- set_units(0.04/drop_units(DWWW), "gDW L-1") # Zanolla tested 1 individual in lab settings
 dens.1 <- dens.1*N_perc
-dens.1 <- set_units(dens.1, "mg m-3")
+dens.1 <- set_units(dens.1, "mgN m-3")
 
 I_o <- 150
 
@@ -713,8 +782,8 @@ spec_params_light <- c(a_cs = a_cs, # This is the a_cs value from Figueroa 2006
                        I_o = I_o, 
                        h_max = 0.1) # height is constant at full culture depth range
 
-test_I$I_lim <- sapply(X = test_I$Ic, FUN = I_lim, Nf = drop_units(dens.1), 
-                       spec_params = spec_params_light, site_params = site_params_light)
+test_I$I_lim <- diag(sapply(X = test_I$Ic, FUN = I_lim, Nf = drop_units(dens.1), kW = rep(0.1, nrow(test_I)),
+                       spec_params = spec_params_light, site_params = site_params_light))
 ```
 
 ```{r Ilim test plot}
@@ -722,12 +791,14 @@ test_I$I_lim <- sapply(X = test_I$Ic, FUN = I_lim, Nf = drop_units(dens.1),
 #| fig-cap: |
 #|    Relative NPR$_{max}$ with changing irradiance from Zanolla et al. (2015) (colors) and from the $I_{lim}$ function (black line). The grey dashed line shows the peak of $I_o=150$ $\mu$mol photons m$^{-2}$ s$^{-1}$.
 
-pI.1 +
-  geom_line(data = test_I, aes(x = Ic, y = I_lim), color = "black") +
-  geom_vline(xintercept = 150, color = "grey", linetype = "dashed")
+ggplot(test_I, aes(x = Ic, y = I_lim)) +
+  geom_line() +
+  scale_y_continuous(limits = c(0,1)) +
+  theme_classic() +
+  geom_vline(xintercept = I_o, color = "grey", linetype = "dashed")
 ```
 
-## Fragmentation with exposure
+# Fragmentation with exposure
 
 “The highest percentage of biomass lost from any single tetrasporophyte in the experiment was 19.34% in the high turbulence treatment, and the lowest was 0.95% biomass loss in the static treatment.” [@hall_investigating_2023, p. 37]
 
@@ -781,31 +852,30 @@ D_hi <- hall_2.9$perc_biomass_lost[hall_2.9$Data == "Mean" & hall_2.9$Label == "
 ```
 
 # Finishing up
-## All parameters and sources {#sec-final-params-tetrasporophyte}
+## All parameters and sources {#sec-final-params}
 
-This is exactly what's going into the species vectors.
+@tbl-params shows exactly what's going into the species vectors. Note that only one of $V_{am}$ & $K_{am}$ or $M_{am}$ & $C_{am}$ will be used as the macroalgae will not have both linear and Michaelis-Menton uptake of the same nutrient. 
 
-| Parameter |   Value  |               Source            |
-|-----------------|:--------------:|:-------------------------------:|
-| $V_{am}$, $K_{am}$              | `r V_am`, `r K_am`   |  |
-| $M_{am}$, $C_{am}$              | `r M_am`, `r C_am`   |  |
-| $V_{ni}$, $K_{ni}$              | `r V_ni`, `r K_ni`   |  |
-| $M_{ni}$, $C_{ni}$              | `r M_ni`, `r C_ni`   |  |
-| $V_{ot}$, $K_{ot}$              | `r V_ot`, `r K_ot`   |  |
-| $M_{ot}$, $C_{ot}$              | `r M_ot`, `r C_ot`   |  |
-| $K_{c}$                         | `r K_c`              |  |
-| $Q_{min}$, $Q_{max}$            | `r Q_min`, `r Q_max` |  |
-| $N_{min}$, $N_{max}$            | `r N_min`, `r N_max` |  |
-| $DWWW$                          | `r DWWW`             |  |
-| $\mu$                           | `r mu`               |  |
-| $D_{m}$, $D_{v}$                | `r D_m`, `r D_ve`    |  |
-| $D_{lo}$, $D_{mi}$, $D_{hi}$    | `r D_lo`, `r D_mi`, `r D_hi` |  |
-| $I_o$, $a_{cs}$                 | `r I_o`, `r a_cs`    |  |
-| $T_{opt}$, $T_{min}$, $T_{max}$ (_A. armata_) | `r T_opt_arma`, `r T_min_arma`, `r T_max_arma` |  |
-| $T_{opt}$, $T_{min}$, $T_{max}$ (_A. taxiformis_) | `r T_opt_taxi`, `r T_min_taxi`, `r T_max_taxi` |  |
-| $S_{opt}$, $S_{min}$, $S_{max}$ | `r S_opt`, `r S_min`, `r S_max` |  |
-| $h_a$, $h_b$, $h_c$, $h_{max}$  | `r h_a`, `r h_b`, `r h_c`, `r h_max`|  |
-: Final values for species parameters before saving.
+| Parameter | _A. armata_ value | _A. taxiformis_ value | Sources |
+|-----------------|:--------------:|:--------------:|:-------------------------------:|
+| $V_{am}$, $K_{am}$              | `r V_am`, `r K_am`   | | @schuenhoff_tetrasporophyte_2006 |
+| $M_{am}$, $C_{am}$              | `r M_am`, `r C_am`   | | @torres_nitrogen_2021 |
+| $V_{ni}$, $K_{ni}$              | `r V_ni`, `r K_ni`   | |  |
+| $M_{ni}$, $C_{ni}$              | `r M_ni`, `r C_ni`   | | @torres_nitrogen_2021 |
+| $V_{ot}$, $K_{ot}$              | `r V_ot`, `r K_ot`   | |  |
+| $M_{ot}$, $C_{ot}$              | `r M_ot`, `r C_ot`   | | @torres_nitrogen_2021 |
+| $K_{c}$                         | `r K_c`              | | @hadley_modeling_2015 |
+| $N_{min}$, $Q_{min}$            | `r N_min`, `r Q_min` | | @mihaila_new_2022; @zemke-white_chlorophyte_1999; @angell_protein_2016 |
+| $N_{max}$, $Q_{max}$            | `r N_max`, `r Q_max` | | @schuenhoff_tetrasporophyte_2006 |
+| $DWWW$                          | `r DWWW_arma`        | `r DWWW_taxi` | @nunes_evaluation_2024; @roque_effect_2019 |
+| $\mu$                           | `r mu`               | |  |
+| $D_{m}$, $D_{v}$                | `r D_m`, `r D_ve`    | |  |
+| $D_{lo}$, $D_{mi}$, $D_{hi}$    | `r D_lo`, `r D_mi`, `r D_hi` | |  |
+| $I_o$, $a_{cs}$                 | `r I_o`, `r a_cs`    | |  |
+| $T_{opt}$, $T_{min}$, $T_{max}$ | `r T_opt_arma`, `r T_min_arma`, `r T_max_arma` | `r T_opt_taxi`, `r T_min_taxi`, `r T_max_taxi` |  |
+| $S_{opt}$, $S_{min}$, $S_{max}$ | `r S_opt`, `r S_min`, `r S_max` | |  |
+| $h_a$, $h_b$, $h_c$, $h_{max}$  | `r h_a`, `r h_b`, `r h_c`, `r h_max` | |  |
+: Final values for species parameters before saving. {#tbl-params}
 
 ## Saving data {#sec-save-tetrasporophyte}
 
@@ -813,6 +883,7 @@ The model uses a named vector, which can be loaded straight from Rdata files, bu
 
 ```{r named vector tetrasporophyte}
 #| code-summary: Insert values and units into named vector
+#| eval: false
 
 a_armata_tetrasporophyte <- c(
   V_am = V_am,
@@ -882,8 +953,9 @@ a_taxiformis_tetrasporophyte['T_max'] <- T_max_taxi
 a_taxiformis_tetrasporophyte['T_min'] <- T_min_taxi
 ```
 
-```{r save tetrasporophyte, eval=FALSE}
+```{r save tetrasporophyte}
 #| code-summary: Save named vector and .csv file
+#| eval: false
 
 # Save data as a named vector - model uses this
 # save(a_armata_tetrasporophyte, file = file.path(base_path, "data", "asparagopsis_armata_tetrasporophyte.rda"))
@@ -903,111 +975,7 @@ write.csv(df, file.path(base_path, "data", "asparagopsis_taxiformis_tetrasporoph
 ```
 
 # Gametophytes 
-
-## Nitrogen uptake {#sec-nitrogen-uptake-gametophyte}
-
-It's possible that the gametophyte and tetrasporophyte will have different uptake rates of ammonium and nitrate, and in the wild they do not appear to be affected by fluctuations in nutrients [@zanolla_concise_2022; @zanolla_structure_2018, @zanolla_assessing_2018]. However, if we assume that the gametophyte has a similar preference for ammonium to the sporophyte then it's not surprising that it would show little response to nutrients in the environment, as natural nitrogen is mostly in nitrate form with ammonium only being present at constant low levels generally. 
-
-::: {.column-margin .callout-important}
-@zanolla_assessing_2018 didn't directly measure nutrients(?) but found that temperature was highly correlated with species distribution. Check @zanolla_structure_2018 - did they measure nutrients?
-:::
-
-As far as I can tell, no-one has investigated nitrogen uptake directly in _Asparagopsis_ gametophytes. I will therefore be using the uptake rates calculated for the tetrasporophyte.
-
-## Internal nutrient state {#sec-internal-nitrogen-gametophyte}
-
-Maximum (or, at least, very high) internal nitrogen concentrations for _Asparagopsis_ are fairly easy to find. _A. taxiformis_ had a protein content of 22.69 %DM in @nunes_evaluation_2024 and 23.76 %DM in @pacheco_invasive_2020. @nunes_evaluation_2024 also found that _A. armata_ had a protein concentration of 24.23 %DM. However, the _A. taxiformis_ spp. gametophytes eaten in Hawaii have also been reported having protein concentrations <10 %DW [@mcdermid_nutritional_2003], and all of these measurements came from the invasive range of _Asparagopsis_.
-
-Samples of _A. armata_ collected from New Zealand showed a protein concentrations ranging from of 10.94 to 15.2 %DW [@mihaila_new_2022; @zemke-white_chlorophyte_1999], while Australian samples of _A. taxiformis_ had mean a protein concentration of 18.2 %DW [@brooke_methane_2020]. 
-
-There are two observations made from this. First, _A. armata_ appears to have a slightly higher average protein concentration than _A. taxiformis_, although this might be due to small sample sizes and a lack of direct comparison. Second, the samples collected from Australia and New Zealand had a much lower protein concentration than those collected elsewhere [@nunes_evaluation_2024; @mihaila_new_2022], possibly reflecting the region's naturally low nitrogen levels. 
-Luckily, these results can still be useful as there appear to be no significant differences between the protein content of cultured and wild macroalgae, so intra-species variation is probably the largest factor determining the protein content of most macroalgae [@angell_protein_2016]. 
-
-```{r internal N gametophyte}
-#| code-summary: Range of protein concentrations
-
-P_range_taxi <- sort(c(22.69, 23.76, 18.2, 7.5))/100 # Asparagopsis taxiformis
-P_range_arma <- sort(c(24.23, 15.2, 10.94))/100 # Asparagopsis armata
-
-N_conv_aspara <- 5.63
-N_conv_reds <- 5.10
-```
-
-There are also different possible ways of converting protein to nitrogen: @angell_protein_2016 suggested that a factor 5.10 is most appropriate for red algae, although they also reported _Asparagopsis_ specifically having a conversion factor of 5.63 which was used by @mihaila_new_2022 in their calculations. 
-These two conversion factors produce nitrogen concentrations ranging from 
-`r round(100*min(P_range_arma)/N_conv_reds, 2)` to `r round(100*max(P_range_arma)/N_conv_reds, 2)` and 
-`r round(100*min(P_range_arma)/N_conv_aspara, 2)` to `r round(100*max(P_range_arma)/N_conv_aspara, 2)` % DW for _A. armata_ respectively. 
-
-```{r Q_min and Q_max}
-#| code-summary: |
-#|   Choosing $Q_{min}$ and $Q_{max}$ values
-
-N_min <- set_units(min(P_range_arma)/N_conv_aspara, "g gDW-1")
-Q_min <- drop_units(set_units(N_min, "mg gDW-1"))
-N_max <- set_units(max(P_range_arma)/N_conv_aspara, "g gDW-1")
-Q_max <- drop_units(set_units(N_max, "mg gDW-1"))
-```
-
-This gives a $Q_{min}$ of `r round(Q_min, 2)` mg gDW$^{-1}$ and a $Q_{max}$ of `r round(Q_max, 2)` mg gDW$^{-1}$.
-
-## Salinity {#sec-salinity-gametophyte}
-
-There's really not enough information to do this seperately, so we'll have to go with the tetrasporophyte estimate. 
-
 ## Biomass factors
-### Dry weight to fresh weight {#sec-dry-weight-gametophyte}
-
-@nunes_evaluation_2024 found a dry mass of 6.55 $\pm$ 1.25% for _A. taxiformis_ and 7.68 $\pm$ 1.07% for _A. armata_, and reported that similar values were found by @roque_effect_2019. 
-
-```{r dry weight gametophyte}
-#| code-summary: Set DWWW units based on @nunes_evaluation_2024
-
-remove_unit("gWW")
-install_unit("gWW", "1/7.68 gDW") # A. armata
-DWWW <- set_units(1, "gDW") %>% 
-  set_units("gWW") %>% 
-  drop_units()
-```
-
-### Height {#sec-height-gametophyte}
-
-Within the model, "height" does not indicate height exactly, rather it indicates how much of the available space is being taken up by the macroalgae. This combines with density (mg m$^{-3}$, i.e. growth) to indicate how much light and nutrients the macroalgae has access to. For example:
-
-- a macroalgae with a high growth rate but a low height-increase rate (e.g. an _Asparagopsis_ tetrasporophyte) will be more dense in a smaller volume, potentially having higher self-shading rates and decreased access to nutrients
-- a macroalgae with a low growth rate and a high height-increase rate (e.g. _Ecklonia_) will be less dense in a larger volume, potentially lower self-shading rates and increased access to nutrients
-
-```{r calculating}
-#| include: FALSE
-
-sizedis <- set_units(115, "gDW m-2")*set_units(0.26,"m-1")
-sizedisN <- set_units(drop_units(sizedis*0.06), "g m-3")
-sizedisN <- set_units(sizedisN, "mg m-3")
-```
-
-@zanolla_size_2018 reported that _A, taxiformis_ gametophyte branches had a maximum length of ~26 cm at ~115 g DW m$^{-2}$. This is equivalent to approximately `r sizedis` g DW m$^{-3}$. Assuming a nitrogen concentration of 6%, this translates to `r sizedisN` g N mg$^{-3}$. 
-@zanolla_size_2018 found that smaller size classes were more abundant than higher classes, indicating that the gametophyte prioritises new shoots (lateral growth) over increasing height (vertical growth). Within the model this is captured by a very slow overall increase in height. 
-
-```{r height}
-#| code-summary: Create a realistic height curve
-#| fig-cap: |
-#|    Algae height with Nf using spec_params = c(h_a = 3850, h_b = 1.75, h_c = 0.001, h_max = 0.26). The dashed line shows the point at which max height is reached (1794 g N m$^{-3}$)
-
-h_a <- 3850
-h_b <- 1.75
-h_c <- 0.001
-h_max <- 0.26
-
-dens <- seq(10, drop_units(sizedisN)+500, 10)
-h <- sapply(X = dens, FUN = algae_height, spec_params = c(h_a = h_a, h_b = h_b, h_c = h_c, h_max = h_max))
-height <- data.frame(dens = set_units(dens, "mg m-3"), h = set_units(h, "m"))
-
-ggplot(height) +
-  geom_line(aes(x = dens, y = h)) +
-  geom_vline(xintercept = sizedisN, linetype = "dashed") +
-  prettyplot +
-  labs(x = "Nf", y = "Height")
-```
-
 ### Growth rate, stocking density {#sec-growth-rate-gametophyte}
 
 @zanolla_size_2018? @wright_asexual_2022?
@@ -1206,34 +1174,35 @@ D_hi <- hall_3.28$perc_biomass_lost[hall_3.28$Data == "Mean" & hall_3.28$Label =
 
 
 # Finishing up
-## All parameters and sources {#sec-final-params-gametophyte}
+## All parameters and sources
 
-| Parameter |   Value  |               Source            |
-|-----------------|:--------------:|:-------------------------------:|
-| $V_{am}$, $K_{am}$              | `r V_am`, `r K_am`   | @schuenhoff_tetrasporophyte_2006 |
-| $M_{am}$, $C_{am}$              | `r M_am`, `r C_am`   | @torres_nitrogen_2021 |
-| $V_{ni}$, $K_{ni}$              | `r V_ni`, `r K_ni`   |  |
-| $M_{ni}$, $C_{ni}$              | `r M_ni`, `r C_ni`   |  |
-| $V_{ot}$, $K_{ot}$              | `r V_ot`, `r K_ot`   |  |
-| $M_{ot}$, $C_{ot}$              | `r M_ot`, `r C_ot`   |  |
-| $K_{c}$                         | `r K_c`              |  |
-| $Q_{min}$, $Q_{max}$            | `r Q_min`, `r Q_max` |  |
-| $N_{min}$, $N_{max}$            | `r N_min`, `r N_max` |  |
-| $DWWW$                          | `r DWWW`             |  |
-| $\mu$                           | `r mu`               |  |
-| $D_{m}$, $D_{v}$                | `r D_m`, `r D_ve`    |  |
-| $D_{lo}$, $D_{mi}$, $D_{hi}$    | `r D_lo`, `r D_mi`, `r D_hi` |  |
-| $I_o$, $a_{cs}$                 | `r I_o`, `r a_cs`    |  |
-| $T_{opt}$, $T_{min}$, $T_{max}$ (_A. armata_) | `r T_opt_arma`, `r T_min_arma`, `r T_max_arma` |  |
-| $T_{opt}$, $T_{min}$, $T_{max}$ (_A. taxiformis_) | `r T_opt_taxi`, `r T_min_taxi`, `r T_max_taxi` |  |
-| $S_{opt}$, $S_{min}$, $S_{max}$ | `r S_opt`, `r S_min`, `r S_max` |  |
-| $h_a$, $h_b$, $h_c$, $h_{max}$  | `r h_a`, `r h_b`, `r h_c`, `r h_max`|  |
+| Parameter |   Value  | Source | Note |
+|-----------------|:--------------:|:-------------------------------:|:-------------------------------|
+| $V_{am}$, $K_{am}$              | `r V_am`, `r K_am`   | @schuenhoff_tetrasporophyte_2006 |  |
+| $M_{am}$, $C_{am}$              | `r M_am`, `r C_am`   | @torres_nitrogen_2021 |  |
+| $V_{ni}$, $K_{ni}$              | `r V_ni`, `r K_ni`   |  |  |
+| $M_{ni}$, $C_{ni}$              | `r M_ni`, `r C_ni`   |  |  |
+| $V_{ot}$, $K_{ot}$              | `r V_ot`, `r K_ot`   |  |  |
+| $M_{ot}$, $C_{ot}$              | `r M_ot`, `r C_ot`   |  |  |
+| $K_{c}$                         | `r K_c`              |  |  |
+| $Q_{min}$, $Q_{max}$            | `r Q_min`, `r Q_max` |  |  |
+| $N_{min}$, $N_{max}$            | `r N_min`, `r N_max` |  |  |
+| $DWWW$                          | `r DWWW`             |  |  |
+| $\mu$                           | `r mu`               |  |  |
+| $D_{m}$, $D_{v}$                | `r D_m`, `r D_ve`    |  |  |
+| $D_{lo}$, $D_{mi}$, $D_{hi}$    | `r D_lo`, `r D_mi`, `r D_hi` |  |  |
+| $I_o$, $a_{cs}$                 | `r I_o`, `r a_cs`    |  |  |
+| $T_{opt}$, $T_{min}$, $T_{max}$ (_A. armata_) | `r T_opt_arma`, `r T_min_arma`, `r T_max_arma` |  |  |
+| $T_{opt}$, $T_{min}$, $T_{max}$ (_A. taxiformis_) | `r T_opt_taxi`, `r T_min_taxi`, `r T_max_taxi` |  |  |
+| $S_{opt}$, $S_{min}$, $S_{max}$ | `r S_opt`, `r S_min`, `r S_max` |  |  |
+| $h_a$, $h_b$, $h_c$, $h_{max}$  | `r h_a`, `r h_b`, `r h_c`, `r h_max`|  |  |
 : Final values for species parameters before saving.
 
 ## Saving data {#sec-save-gametophyte}
 
 ```{r named vector gametophyte}
 #| code-summary: Insert values and units into named vector
+#| eval: false
 
 a_armata_gametophyte <- c(
   V_am = V_am,
@@ -1282,6 +1251,7 @@ a_taxiformis_gametophyte['T_min'] <- T_min_taxi
 
 ```{r save gametophyte}
 #| code-summary: Save named vector and .csv file
+#| eval: false
 
 # Save data as a named vector - model uses this
 # save(a_armata_gametophyte, file = file.path(base_path, "data", "asparagopsis_armata_gametophyte.rda"))
