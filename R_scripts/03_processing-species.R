@@ -86,7 +86,7 @@ light <- data.frame(light = seq(0, 1600, 25))
 culture_depths <- tar_read(culture_depths)
 ls1 <- list()
 for (d in 1:length(culture_depths)) {
-  light$arma <- sapply(X = light$light, FUN = I_lim, Nf = 500, site_params = c(d_top = culture_depths[d], kW = 0.2), spec_params = arma)
+  light$arma <- sapply(X = light$light, FUN = I_lim, kW = 0.1, Nf = 500, site_params = c(d_top = culture_depths[d], kW = 0.2), spec_params = arma)
   ls1[[d]] <- light %>%
     pivot_longer(cols = c("arma"), names_to = "species", values_to = "Ilim") %>%
     mutate(depth_m = culture_depths[d])

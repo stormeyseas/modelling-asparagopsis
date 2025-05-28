@@ -3,6 +3,11 @@ library(magrittr, warn.conflicts = F)
 library(stringr, warn.conflicts = F)
 library(dplyr, warn.conflicts = F)
 library(gitcreds, warn.conflicts = F)
+fixnum <- function(n, digits = 4) {
+  vapply(n, function(x) {
+    str_flatten(c(rep("0", digits-nchar(as.character(x))), as.character(x)))
+  }, character(1))
+}
 
 # Species ---------------------------------------------------------------------------------------------------------
 # The species project collates all the species data into iterable lists for easier model running, and also runs all the sensitivity analyses on species parameters. It doesn't use anything from the other targets projects.
@@ -11,7 +16,7 @@ library(gitcreds, warn.conflicts = F)
 ## Targets run ----------------------------------------------------------------------------------------------------
 Sys.setenv(TAR_PROJECT = "project_species")
 
-tar_validate()
+tar_outdated()
 tar_make(reporter = "balanced", seconds_meta_append = 300)
 source("R_scripts/03_processing-species.R")
 
@@ -44,62 +49,23 @@ source("R_scripts/07_extract-MODIS-data.R")
 data_path <- file.path("D:", "FRDC-Seaweed-Raw-Data", "AusBathyTopo 2024")
 source("R_scripts/08_extract-AusBathyTopo-data.R")
 
-## Targets cell data ----------------------------------------------------------------------------------------------
-projects <- tibble::tribble(
-  ~state, ~st, ~upd,
-  "QLD",  "targets_outputs/_model_running_QLD", NA, 
-  "TAS",  "targets_outputs/_model_running_TAS", NA, 
-  "SAU",  "targets_outputs/_model_running_SAU", NA, 
-  "WAS",  "targets_outputs/_model_running_WAS", NA, 
-  "NSW",  "targets_outputs/_model_running_NSW", NA, 
-  "VIC",  "targets_outputs/_model_running_VIC", NA, 
-  "WAN",  "targets_outputs/_model_running_WAN", NA, 
-  "NTE",  "targets_outputs/_model_running_NTE", NA
+## Targets run ----------------------------------------------------------------------------------------------------
+Sys.setenv(TAR_PROJECT = "project_inputs")
+
+tar_outdated()
+tar_make(seconds_meta_append = 90)
+source("R_scripts/10_processing_env_inputs.R")
+
+# Model running ---------------------------------------------------------------------------------------------------
+Sys.setenv(TAR_PROJECT = "project_running")
+
+tar_outdated()
+tar_make(
+  names = c("cell_growth_extra_lims", "cell_growth_extra", "cell_growth_extra_end"), 
+  shortcut = T, 
+  seconds_meta_append = 190
 )
-sc <- "R_scripts/09_model_running.R"
-
-### Prune ---------------------------------------------------------------------------------------------------------
-for (i in 1:nrow(projects)) {
-  projects$state[i] %>% qsave("targets_outputs/this_state.qs")
-  # try({
-  #   tar_prune(script = sc, store = projects$st[i])
-  #   projects$upd[i] <- 1
-  # })
-  fnms <- "targets_outputs" %>% list.files(full.names = T, recursive = T) %>% str_subset("Ilim_cell_PL")
-  file.remove(fnms)
-}
-
-### Ilim only -----------------------------------------------------------------------------------------------------
-# Targets needed for 10_processing_Ilim_data.R
-# Uncomment slice_sample(n = 2250) line in BARRA_C2_cell_nos
-projects <- projects %>% dplyr::filter(is.na(upd))
-for (i in 1:nrow(projects)) {
-  projects$state[i] %>% qsave("targets_outputs/this_state.qs")
-  try({
-    tar_make(
-      names = "Ilim_cell_PL", #shortcut = T, 
-      seconds_meta_append = 90, script = sc, store = projects$st[i]
-      )
-    projects$upd[i] <- 1
-    })
-}
-source("R_scripts/10_processing_Ilim_data.R") # I_lim depth testing
-
-### All other targets ---------------------------------------------------------------------------------------------
-# Comment out the slice_sample(n = 2250) line in BARRA_C2_cell_nos
-# DO NOT run Ilim_cell_PL - maybe comment that out too
-
-projects <- projects %>% dplyr::filter(is.na(upd))
-for (i in 1:nrow(projects)) {
-  projects$state[i] %>% qs::qsave("targets_outputs/this_state.qs")
-  try({
-    tar_make(
-      seconds_meta_append = 90, shortcut = F, script = sc, store = projects$st[i]
-    )
-    projects$upd[i] <- 1
-  })
-}
-source("R_scripts/11_processing_model_running.R")
+source("R_scripts/12_processing_model_running.R")
 
 # Renv files ------------------------------------------------------------------------------------------------------
 library(gitcreds)
@@ -107,13 +73,18 @@ library(magrittr)
 
 targets::tar_renv(
   extras = c("bslib", "crew", "gt", "markdown", "rstudioapi", "shiny", "shinybusy", "shinyWidgets", "visNetwork", "qs", "qs2"),
-  path = file.path("renv", "packages_model_running.R"),
-  script = file.path("R_scripts", "09_model_running.R")
+  path = file.path("renv", "09_env_inputs.R"),
+  script = file.path("R_scripts", "09_env_inputs.R")
 )
 
 targets::tar_renv(
   path = file.path("renv", "packages_species.R"),
   script = file.path("R_scripts", "02_species.R")
+)
+
+targets::tar_renv(
+  path = file.path("renv", "packages_running.R"),
+  script = file.path("R_scripts", "11_model_running.R")
 )
 
 packs <- renv::dependencies()$Package %>% unique()

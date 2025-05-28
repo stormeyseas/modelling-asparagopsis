@@ -5,7 +5,7 @@ library(tarchetypes)
 tar_option_set(
   packages = c("tidyverse", "ggplot2", "arrow", "lubridate", "macrogrow", "units", "macrogrow", "qs", "qs2"), 
   format = "qs",
-  controller = crew::crew_controller_local(workers = 2, seconds_idle = 60),
+  controller = crew::crew_controller_local(workers = 10, seconds_idle = 60),
   workspace_on_error = T
 )
 
@@ -50,14 +50,15 @@ list(
     sens_conditions,
     data.frame(t_span = rep(1:732, 2)) %>% 
       mutate(
-        Ni_input = 26.60 + 25.90 * sin((t_span * pi - 310) / 182.5),
+        Ni_input = 20.50 + 19.5 * sin((t_span * pi - 350) / 182.5),
         Am_input = 3.15 + 3 * sin((t_span * pi - 325) / 182.5),
         I_input  = 325 + 250 * sin((t_span * pi + 300) / 182.5),
-        S_input  = 35.1 + 0.125 * sin((t_span * pi + 450) / 182.5),
+        S_input  = 35.1 + 0.85 * sin((t_span * pi + 450) / 182.5),
         T_input  = c(26.75 + 3.5 * sin((1:732 * pi + 220) / 182.5), 
                      16.75 + 4.75 * sin((1:732 * pi + 120) / 182.5)),
         T_level  = rep(c(1,2), each = 732),
-        U_input  = 0.3 + 0.25 * sin((t_span * pi + 180) / 182.5)
+        U_input  = 0.3 + 0.25 * sin((t_span * pi + 180) / 182.5),
+        kW       = Secchi_to_Kd(20)
       )
   ),
   tar_target(T_levels, c(1,2)),
@@ -73,7 +74,6 @@ list(
       hc = 5,
       farmA = 50 * 50,
       hz = 50,
-      kW = Secchi_to_Kd(20),
       turbulence = NA
     ),
     pattern = culture_depths,
@@ -113,6 +113,7 @@ list(
       temperature = sens_conditions$T_input[sens_conditions$T_level == T_levels & sens_conditions$t_span %in% starts:(starts + 42)], 
       salinity = sens_conditions$S_input[sens_conditions$T_level == T_levels & sens_conditions$t_span %in% starts:(starts + 42)], 
       light = sens_conditions$I_input[sens_conditions$T_level == T_levels & sens_conditions$t_span %in% starts:(starts + 42)], 
+      kW = sens_conditions$kW[sens_conditions$T_level == T_levels & sens_conditions$t_span %in% starts:(starts + 42)], 
       velocity = sens_conditions$U_input[sens_conditions$T_level == T_levels & sens_conditions$t_span %in% starts:(starts + 42)],
       nitrate = sens_conditions$Ni_input[sens_conditions$T_level == T_levels & sens_conditions$t_span %in% starts:(starts + 42)], 
       ammonium = sens_conditions$Am_input[sens_conditions$T_level == T_levels & sens_conditions$t_span %in% starts:(starts + 42)], 
@@ -161,6 +162,7 @@ list(
       temperature = sens_conditions$T_input[sens_conditions$T_level == T_levels & sens_conditions$t_span %in% starts:(starts + 42)], 
       salinity = sens_conditions$S_input[sens_conditions$T_level == T_levels & sens_conditions$t_span %in% starts:(starts + 42)], 
       light = sens_conditions$I_input[sens_conditions$T_level == T_levels & sens_conditions$t_span %in% starts:(starts + 42)], 
+      kW = sens_conditions$kW[sens_conditions$T_level == T_levels & sens_conditions$t_span %in% starts:(starts + 42)], 
       velocity = sens_conditions$U_input[sens_conditions$T_level == T_levels & sens_conditions$t_span %in% starts:(starts + 42)],
       nitrate = sens_conditions$Ni_input[sens_conditions$T_level == T_levels & sens_conditions$t_span %in% starts:(starts + 42)], 
       ammonium = sens_conditions$Am_input[sens_conditions$T_level == T_levels & sens_conditions$t_span %in% starts:(starts + 42)], 
