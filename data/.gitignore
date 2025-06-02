@@ -1,0 +1,4 @@
+# Data files
+processed_env_inputs/*
+processed_model_running/*
+processed_species/*

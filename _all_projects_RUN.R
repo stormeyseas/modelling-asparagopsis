@@ -13,14 +13,14 @@ fixnum <- function(n, digits = 4) {
 # The species project collates all the species data into iterable lists for easier model running, and also runs all the sensitivity analyses on species parameters. It doesn't use anything from the other targets projects.
   # - parameterisation/asparagopsis-parameterisation.qmd
 
-## Targets run ----------------------------------------------------------------------------------------------------
+## Species targets ------------------------------------------------------------------------------------------------
 Sys.setenv(TAR_PROJECT = "project_species")
 
 tar_outdated()
-tar_make(reporter = "balanced", seconds_meta_append = 300)
+tar_make(seconds_meta_append = 300)
 source("R_scripts/03_processing-species.R")
 
-# Spatial cells ---------------------------------------------------------------------------------------------------
+# Spatial cells data ----------------------------------------------------------------------------------------------
 # The spatial-cells project processes the more ad-hoc data for nitrogen, and collates all the environmental data 
 overwrite <- F
 
@@ -49,7 +49,7 @@ source("R_scripts/07_extract-MODIS-data.R")
 data_path <- file.path("D:", "FRDC-Seaweed-Raw-Data", "AusBathyTopo 2024")
 source("R_scripts/08_extract-AusBathyTopo-data.R")
 
-## Targets run ----------------------------------------------------------------------------------------------------
+## Spatial data targets -------------------------------------------------------------------------------------------
 Sys.setenv(TAR_PROJECT = "project_inputs")
 
 tar_outdated()
@@ -60,11 +60,7 @@ source("R_scripts/10_processing_env_inputs.R")
 Sys.setenv(TAR_PROJECT = "project_running")
 
 tar_outdated()
-tar_make(
-  names = c("cell_growth_extra_lims", "cell_growth_extra", "cell_growth_extra_end"), 
-  shortcut = T, 
-  seconds_meta_append = 190
-)
+tar_make(seconds_meta_append = 190)
 source("R_scripts/12_processing_model_running.R")
 
 # Renv files ------------------------------------------------------------------------------------------------------

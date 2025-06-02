@@ -57,6 +57,7 @@ library(here)
 library(lubridate)
 library(tidyr)
 library(cowplot)
+library(purrr)
 library(conflicted)
 conflicts_prefer(dplyr::select, dplyr::filter)
 ```
@@ -640,7 +641,8 @@ p1 <- sens_cond %>%
   labs(y = expression("Temperature ("*degree*"C)")) +
   prettyplot + 
   annotate("text", x = Inf, y = Inf, label = "A", hjust = 1.5, vjust = 1.5, size = 4, fontface = "plain") +
-  theme(legend.position = "none", axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank())
+  theme(legend.position = "none", aspect.ratio = 0.65, 
+        axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank())
 
 p2 <- sens_cond %>% 
   dplyr::filter(t <= 365 & T_level == 1) %>% 
@@ -651,7 +653,8 @@ p2 <- sens_cond %>%
   labs(y = expression("Irradiance ("*mu*"mol m"^-2*" s"^-1*")")) +
   prettyplot + 
   annotate("text", x = Inf, y = Inf, label = "B", hjust = 1.5, vjust = 1.5, size = 4, fontface = "plain") +
-  theme(legend.position = "none", axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank())
+  theme(legend.position = "none", aspect.ratio = 0.65, 
+        axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank())
 
 p3 <- sens_cond %>% 
   dplyr::filter(t <= 365 & T_level == 1) %>% 
@@ -662,7 +665,8 @@ p3 <- sens_cond %>%
   labs(y = expression("Water velocity (m"^-1*" s"^-1*")")) +
   prettyplot + 
   annotate("text", x = Inf, y = Inf, label = "C", hjust = 1.5, vjust = 1.5, size = 4, fontface = "plain") +
-  theme(legend.position = "none", axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank())
+  theme(legend.position = "none", aspect.ratio = 0.65, 
+        axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank())
 
 p4 <- sens_cond %>% 
   dplyr::filter(t <= 365 & T_level == 1) %>% 
@@ -673,7 +677,8 @@ p4 <- sens_cond %>%
   labs(y = expression("Salinity (g L"^-1*")")) +
   prettyplot + 
   annotate("text", x = Inf, y = Inf, label = "D", hjust = 1.5, vjust = 1.5, size = 4, fontface = "plain") +
-  theme(legend.position = "none", axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank())
+  theme(legend.position = "none", aspect.ratio = 0.65, 
+        axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank())
 
 pdata1 <- sens_cond %>% 
   dplyr::filter(t <= 365 & T_level == 1) %>% 
@@ -691,7 +696,7 @@ p5 <- pdata1 %>%
   labs(y = nitrate_lab) +
   prettyplot + 
   annotate("text", x = Inf, y = Inf, label = "E", hjust = 1.5, vjust = 1.5, size = 4, fontface = "plain") +
-  theme(legend.position = "none", axis.title.x = element_blank())
+  theme(legend.position = "none", aspect.ratio = 0.65, axis.title.x = element_blank())
 
 p6 <- pdata1 %>% 
   ggplot(aes(x = t, y = Am_input)) +
@@ -701,7 +706,7 @@ p6 <- pdata1 %>%
   labs(y = ammonium_lab) +
   prettyplot + 
   annotate("text", x = Inf, y = Inf, label = "F", hjust = 1.5, vjust = 1.5, size = 4, fontface = "plain") +
-  theme(legend.position = "none", axis.title.x = element_blank())
+  theme(legend.position = "none", aspect.ratio = 0.65, axis.title.x = element_blank())
 
 plot_grid(
   plot_grid(p1, p2, p3, p4, p5, p6, ncol = 2, align = "hv"),
@@ -929,25 +934,14 @@ cell_growth_lims_fnms <- file.path(runs_data, "cell_growth") %>%
   list.files(full.names = T) %>% 
   str_subset("cell_growth_lims_abbrev")
 
-# # This gives you a daily growth limiter for every cell
-# armata_lims <- map_dfr(cell_growth_lims_fnms, function(fnm) {
-#   fnm %>% 
-#     arrow::read_parquet() %>% 
-#     filter(species == "armata") %>% 
-#     mutate(t = as.integer(t),
-#            t = case_when(t > 365 ~ t-365, T ~ t),
-#            start = as.integer(lubridate::month(parse_date_time(x = start, orders = "j"))+1),
-#            start = case_when(start == 13 ~ 1, month == 14 ~ 2, T ~ start))
-# })
-# taxiformis_lims <- map_dfr(cell_growth_lims_fnms, function(fnm) {
-#   fnm %>% 
-#     arrow::read_parquet() %>% 
-#     filter(species == "taxiformis") %>% 
-#     mutate(t = as.integer(t),
-#            t = case_when(t > 365 ~ t-365, T ~ t),
-#            start = as.integer(lubridate::month(parse_date_time(x = start, orders = "j"))+1),
-#            start = case_when(start == 13 ~ 1, month == 14 ~ 2, T ~ start))
-# })
+# This gives you a daily growth limiter for every cell
+armata_lims <- map_dfr(cell_growth_lims_fnms, function(fnm) {
+  arrow::read_parquet(fnm) %>%
+    filter(species == "armata") %>%
+    mutate(t = as.integer(t), t = case_when(t > 365 ~ t-365, T ~ t)) %>% 
+    distinct(cell_no, species, t, lim)
+})  %>% 
+  merge(cell_coords, by = "cell_no")
 
 # This gives you the dominant growth limiters per cell per month
 dom_lims <- file.path(runs_data, "cell_growth_dom_lims.parquet") %>% 
@@ -959,6 +953,56 @@ dom_lims <- file.path(runs_data, "cell_growth_dom_lims.parquet") %>%
 ```
 
 #### _Asparagopsis armata_
+
+```{r armata lims stats}
+#| eval: true
+#| code-summary: See if there are any days where different lims are conflicting (different batches)
+
+stat1 <- armata_lims %>% 
+  filter(latitude > -32) %>% 
+  group_by(species, cell_no, lim) %>% 
+  reframe(perc_days = n()/365)
+stat1_T <- mean(stat1$perc_days[stat1$lim == "T_lim"])
+stat1_Q <- mean(stat1$perc_days[stat1$lim == "Q_lim"])
+stat1_I <- mean(stat1$perc_days[stat1$lim == "I_lim"])
+
+stat2 <- armata_lims %>% 
+  filter(latitude <= -32) %>% 
+  group_by(species, cell_no, lim) %>% 
+  reframe(perc_days = n()/365)
+stat2_T <- mean(stat2$perc_days[stat2$lim == "T_lim"])
+stat2_Q <- mean(stat2$perc_days[stat2$lim == "Q_lim"])
+stat2_I <- mean(stat2$perc_days[stat2$lim == "I_lim"])
+```
+
+For _A. armata_ grown at latitudes > -32$^\circ$, a mean of 
+`r round(100*stat1_T,1)`% of growing days were limited by temperature, 
+`r round(100*stat1_Q,1)`% were limited by nutrients, and 
+`r round(100*stat1_I,1)`% were limited by light. 
+
+For _A. armata_ grown at latitudes < -32$^\circ$, a mean of 
+`r round(100*stat2_T,1)`% of growing days were limited by temperature, 
+`r round(100*stat2_Q,1)`% were limited by nutrients, and 
+`r round(100*stat2_I,1)`% were limited by light. 
+
+```{r fig-growth-lim-armata-hist}
+(
+  p_dom_xy <- armata_lims %>% 
+    filter(species == "armata") %>% 
+    filter(latitude <= -30) %>% 
+    # slice_sample(n = 3000) %>%
+    mutate(month = parse_date_time(t, orders = "j"),
+           month = factor(month(month), labels = month.name)) %>% 
+    ggplot(aes(y = latitude, fill = lim, colour = lim)) +
+    geom_histogram(position = "stack", alpha = 0.75) +
+    facet_wrap(facets = vars(month)) +
+    theme_classic() +
+    scale_fill_manual(values = lims_pal) +
+    scale_colour_manual(values = lims_pal) +
+    labs(x = expression("Cells"*%*%*"number of days"), y = "Latitude")
+)
+```
+
 
 ```{r fig-growth-lim-armata}
 #| eval: true

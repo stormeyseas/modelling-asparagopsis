@@ -29,25 +29,38 @@ tar_source(
 )
 
 units::remove_unit("molN")
-units::install_unit(symbol = "molN", def = "14.007 g")
-Ni_add <- 3.5 %>% units::set_units("umolN L-1") %>% units::set_units("mg m-3") %>% units::drop_units()
-Am_add <- 6.5 %>% units::set_units("umolN L-1") %>% units::set_units("mg m-3") %>% units::drop_units()
+units::remove_unit("gN")
+units::install_unit("gN")
+units::install_unit(symbol = "molN", def = "14.007 gN")
+Ni_add <- 3.5 %>% units::set_units("umolN L-1") %>% units::set_units("mgN m-3") %>% units::drop_units()
+Am_add <- 6.5 %>% units::set_units("umolN L-1") %>% units::set_units("mgN m-3") %>% units::drop_units()
 
-chunk_size <- 100
+chunk_size <- 150
+
+a_armata_gametophyte <- targets::tar_read(a_armata_gametophyte, store = "targets_outputs/_species")
+a_taxiformis_gametophyte <- targets::tar_read(a_taxiformis_gametophyte, store = "targets_outputs/_species")
+
+init_biomass <- 0.005 %>% units::set_units("g L-1") %>% units::set_units("mg m-3") %>% units::drop_units()
+init_Q_rel <- 0.25
+init_state_armata <- c(Q_rel = init_Q_rel)
+init_state_armata <- c(init_state_armata, 
+                       macrogrow::biomass_to_Nf(biomass = init_biomass, Q_rel = init_state_armata["Q_rel"], 
+                                                spec_params = a_armata_gametophyte, dry = T))
+init_state_taxiformis <- c(Q_rel = init_Q_rel)
+init_state_taxiformis <- c(init_state_taxiformis, 
+                           macrogrow::biomass_to_Nf(biomass = init_biomass, Q_rel = init_state_taxiformis["Q_rel"], 
+                                                    spec_params = a_taxiformis_gametophyte, dry = T))
+
 
 list(
   # Species data --------------------------------------------------------------------------------------------------
-  tar_target(
-    species_data, 
-    list(targets::tar_read(a_armata_gametophyte, store = "targets_outputs/_species"),
-         targets::tar_read(a_taxiformis_gametophyte, store = "targets_outputs/_species"))
-  ),
   tar_target(species_names, c("armata", "taxiformis")),
 
   tar_target(BARRA_C2_cell_coords_file, "data/processed_env_inputs/BARRA_C2_cell_coords.parquet", format = "file"),
   tar_target(BARRA_C2_cell_coords, arrow::read_parquet(BARRA_C2_cell_coords_file)),
   tar_target(states, unique(BARRA_C2_cell_coords$state)),
   
+  # Cell data -----------------------------------------------------------------------------------------------------
   tar_target(BARRA_C2_cell_nos_file, "data/processed_env_inputs/BARRA_C2_cell_nos.qs", format = "file"),
   tar_target(bathy_file, "data/processed_env_inputs/cell_bathy.parquet", format = "file"),
   tar_target(cell_bathy, arrow::read_parquet(bathy_file)),
@@ -69,7 +82,9 @@ list(
   
   # Cell inputs ---------------------------------------------------------------------------------------------------
   tar_target(
-    cell_inputs_files, list.files("data/processed_env_inputs", full.names = T) %>% 
+    cell_inputs_files, 
+    fil.epath("data", "processed_env_inputs", "cell_input_all") %>% 
+      list.files(full.names = T) %>% 
       str_subset("cell_input_all"), 
     format = "file"
   ),
@@ -79,8 +94,7 @@ list(
       df <- purrr::map_dfr(cell_inputs_files, function(file) {
         arrow::read_parquet(file) %>% 
           dplyr::filter(cell_no %in% BARRA_C2_cell_nos_chunked[[1]])
-      }) %>% 
-        mutate(state = as.factor(state))
+      })
       split(df, df$cell_no)
     },
     pattern = BARRA_C2_cell_nos_chunked,
@@ -92,194 +106,275 @@ list(
     state_inputs, 
     state_inputs_file %>% 
       purrr::map_dfr(arrow::read_parquet) %>% 
-      dplyr::filter(yday <= 400 & state == states),
+      dplyr::filter(state == states),
     pattern = states
-  ),
-  
-  # Run model -----------------------------------------------------------------------------------------------------
-  tar_target(init_biomass, 0.005 %>% units::set_units("g L-1") %>% 
-               units::set_units("mg m-3") %>% units::drop_units()),
-  tar_target(
-    init_state,
-    c(Nf = biomass_to_Nf(biomass = init_biomass, Q_rel = 0.5, spec_params = unlist(species_data), dry = T),
-      Q_rel = 0.5),
-    pattern = species_data,
-    iteration = "list"
   ),
   
   # Total growth --------------------------------------------------------------------------------------------------
   tar_target(months_growth, 1:12),
+  tar_target(start_ydays_growth, lubridate::make_date(2023, months_growth, 1) %>% lubridate::yday()),
+  tar_target(end_ydays_growth, c(start_ydays_growth[2:12], 366)),
   tar_target(
-    start_dates_growth, 
-    lubridate::ceiling_date(lubridate::make_date(2023, months_growth, 15), 'month') - lubridate::days(42+1), 
-    pattern = months_growth
-  ),
-  tar_target(start_ydays_growth, lubridate::yday(start_dates_growth), pattern = start_dates_growth),
-  tar_target(
-    cell_growth,
+    cell_growth_armata,
     command = {
-      purrr::map2_dfr(BARRA_C2_cell_nos_chunked[[1]], cell_inputs_chunked, function(cell, input) {
-        mat <- grow_macroalgae(
+      cell_nos <- BARRA_C2_cell_nos_chunked[[1]]
+      inputs_chunked <- lapply(cell_inputs_chunked, function(df) {
+        df[df$yday %in% start_ydays_growth:end_ydays_growth, ]
+      })
+      bathy <- cell_bathy %>% filter(cell_no %in% cell_nos)
+      
+      purrr::map2_dfr(cell_nos, inputs_chunked, function(cell, input) {
+        grow_macroalgae(
           start =        start_ydays_growth,
-          grow_days =    42,
-          temperature =  input$T_input[start_ydays_growth:(start_ydays_growth + 42)],
-          salinity =     input$S_input[start_ydays_growth:(start_ydays_growth + 42)],
-          light =        input$I_input[start_ydays_growth:(start_ydays_growth + 42)],
-          kW =           input$Kd_490[start_ydays_growth:(start_ydays_growth + 42)],
-          velocity =     input$UV_input[start_ydays_growth:(start_ydays_growth + 42)],
-          nitrate =      input$Ni_input[start_ydays_growth:(start_ydays_growth + 42)],
-          ammonium =     input$Am_input[start_ydays_growth:(start_ydays_growth + 42)],
+          grow_days =    end_ydays_growth-start_ydays_growth,
+          temperature =  input$T_input,
+          salinity =     input$S_input,
+          light =        input$I_input,
+          kW =           input$Kd_490,
+          velocity =     input$UV_input,
+          nitrate =      input$Ni_input,
+          ammonium =     input$Am_input,
           ni_uptake =    "linear",
           am_uptake =    "MM",
-          site_params =  c(
-            hc = 5,
-            farmA = 50 * 50,
-            turbulence = NA,
-            d_top = 2.5,
-            hz = cell_bathy$hz[cell_bathy$cell_no == cell]
-          ), 
-          spec_params =  species_data[[1]], #unlist(species_data),
-          initials =     init_state
-        )
-        mat %>% 
+          site_params =  c(hc = 5, farmA = 50 * 50, turbulence = NA, d_top = 2.5, 
+                           hz = abs(bathy$hz[bathy$cell_no == cell])), 
+          spec_params =  a_armata_gametophyte,
+          initials =     init_state_armata
+        ) %>% 
           as.data.frame() %>% 
           tibble::remove_rownames() %>% 
-          mutate(cell_no = cell)
+          mutate(
+            cell_no = cell,
+            start = start_ydays_growth,
+            lim = case_when(
+              T_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "T_lim",
+              I_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "I_lim",
+              S_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "S_lim",
+              Q_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "Q_lim",
+              Nf_loss >= Ns_to_Nf ~ "Nf_loss",
+              Ns_loss >= (up_Am + up_Ni) ~ "Ns_loss",
+              T ~ NA
+            ),
+            lim = as.factor(lim),
+            species = as.factor("armata")
+          )
       })
     },
-    pattern = cross(map(species_data, init_state), start_ydays_growth, map(BARRA_C2_cell_nos_chunked, cell_inputs_chunked))
+    pattern = cross(map(start_ydays_growth, end_ydays_growth), map(BARRA_C2_cell_nos_chunked, cell_inputs_chunked))
   ),
   tar_target(
-    cell_growth_lims,
+    cell_growth_taxiformis,
     command = {
-      spec_params <- unlist(species_data)
-      cell_growth %>% 
-        mutate(
-          lim = case_when(
-            growth_rate == spec_params['mu'] ~ "No_limit",
-            T_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "T_lim",
-            I_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "I_lim",
-            S_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "S_lim",
-            Q_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "Q_lim",
-            Nf_loss >= Ns_to_Nf ~ "Nf_loss",
-            Ns_loss >= (up_Am+up_Ni) ~ "Ns_loss",
-            T ~ NA
-          ),
-          lim = as.factor(lim),
-          species = species_names,
-          start = min(start_ydays_growth),
-        )
+      cell_nos <- BARRA_C2_cell_nos_chunked[[1]]
+      inputs_chunked <- lapply(cell_inputs_chunked, function(df) {
+        df[df$yday %in% start_ydays_growth:end_ydays_growth, ]
+      })
+      bathy <- cell_bathy %>% filter(cell_no %in% cell_nos)
+      
+      purrr::map2_dfr(cell_nos, inputs_chunked, function(cell, input) {
+        grow_macroalgae(
+          start =        start_ydays_growth,
+          grow_days =    end_ydays_growth-start_ydays_growth,
+          temperature =  input$T_input,
+          salinity =     input$S_input,
+          light =        input$I_input,
+          kW =           input$Kd_490,
+          velocity =     input$UV_input,
+          nitrate =      input$Ni_input,
+          ammonium =     input$Am_input,
+          ni_uptake =    "linear",
+          am_uptake =    "MM",
+          site_params =  c(hc = 5, farmA = 50 * 50, turbulence = NA, d_top = 2.5, 
+                           hz = abs(bathy$hz[bathy$cell_no == cell])), 
+          spec_params =  a_taxiformis_gametophyte,
+          initials =     init_state_taxiformis
+        ) %>% 
+          as.data.frame() %>% 
+          tibble::remove_rownames() %>% 
+          mutate(
+            cell_no = cell,
+            start = start_ydays_growth,
+            lim = case_when(
+              T_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "T_lim",
+              I_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "I_lim",
+              S_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "S_lim",
+              Q_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "Q_lim",
+              Nf_loss >= Ns_to_Nf ~ "Nf_loss",
+              Ns_loss >= (up_Am + up_Ni) ~ "Ns_loss",
+              T ~ NA
+            ),
+            lim = as.factor(lim),
+            species = as.factor("taxiformis")
+          )
+      })
     },
-    pattern = map(cell_growth, cross(map(species_data, species_names), start_ydays_growth, BARRA_C2_cell_nos_chunked))
+    pattern = cross(map(start_ydays_growth, end_ydays_growth), map(BARRA_C2_cell_nos_chunked, cell_inputs_chunked))
   ),
+  
   tar_target(
     cell_growth_end,
     command = {
-      spec_params <- unlist(species_data)
-      all <- cell_growth %>% 
-        mutate(t_start = start_ydays_growth)
-      start <- all %>% 
-        filter(t == t_start) %>% 
-        mutate(TN_hm_start = (Ns + Nf) * hm * 5,
-               TN_start = (Ns + Nf) * 5) %>% 
-        rename(B_dw_start.mg = B_dw.mg) %>% 
-        dplyr::select(cell_no, TN_hm_start, TN_start, B_dw_start.mg)
-      end <- all %>% 
+      start <- cell_growth_armata %>% 
+        filter(t == start) %>% 
+        mutate(hm_start = hm, TN_start = (Ns + Nf) * 5) %>% 
+        rename(B_dw.mg_start = B_dw.mg) %>% 
+        dplyr::select(start, cell_no, hm_start, TN_start, B_dw.mg_start, species)
+      end <- cell_growth_armata %>% 
         filter(t == max(t)) %>% 
-        rename(t_end = t) %>% 
-        mutate(gr_mean = mean(growth_rate)/unname(spec_params['mu']),
-               TN_hm = (Ns + Nf) * hm * 5,
-               TN = (Ns + Nf) * 5) %>% 
-        dplyr::select(t_start, t_end, cell_no, TN, TN_hm, gr_mean, B_dw.mg)
-      merge(start, end, by = "cell_no") %>% 
-        mutate(success = case_when(TN > TN_start ~ T, T ~ F),
-               species = species_names)
+        rename(end = t, B_dw.mg_end = B_dw.mg) %>% 
+        mutate(gr_mean = mean(growth_rate), hm_end = hm, TN_end = (Ns + Nf) * 5) %>% 
+        dplyr::select(start, end, cell_no, hm_end, TN_end, gr_mean, B_dw.mg_end)
+      arma <- merge(start, end, by = c("cell_no", "start")) %>% 
+        mutate(success = case_when(TN_end > TN_start ~ T, T ~ F))
+      
+      start <- cell_growth_taxiformis %>% 
+        filter(t == start) %>% 
+        mutate(hm_start = hm, TN_start = (Ns + Nf) * 5) %>% 
+        rename(B_dw.mg_start = B_dw.mg) %>% 
+        dplyr::select(start, cell_no, hm_start, TN_start, B_dw.mg_start, species)
+      end <- cell_growth_taxiformis %>% 
+        filter(t == max(t)) %>% 
+        rename(end = t, B_dw.mg_end = B_dw.mg) %>% 
+        mutate(gr_mean = mean(growth_rate), hm_end = hm, TN_end = (Ns + Nf) * 5) %>% 
+        dplyr::select(start, end, cell_no, hm_end, TN_end, gr_mean, B_dw.mg_end)
+      taxi <- merge(start, end, by = c("cell_no", "start")) %>% 
+        mutate(success = case_when(TN_end > TN_start ~ T, T ~ F))
+      
+      rbind(arma, taxi)
       },
-    pattern = map(cell_growth, cross(map(species_data, species_names), start_ydays_growth, BARRA_C2_cell_nos_chunked))
+    pattern = map(cell_growth_armata, cell_growth_taxiformis)
   ),
   
   # Supplemented growth -------------------------------------------------------------------------------------------
   tar_target(
-    cell_growth_extra,
+    cell_growth_supp_armata,
     command = {
-      purrr::map2_dfr(BARRA_C2_cell_nos_chunked[[1]], cell_inputs_chunked, function(cell, input) {
-        mat <- grow_macroalgae(
+      cell_nos <- BARRA_C2_cell_nos_chunked[[1]]
+      inputs_chunked <- lapply(cell_inputs_chunked, function(df) {
+        df[df$yday %in% start_ydays_growth:end_ydays_growth, ]
+      })
+      bathy <- cell_bathy %>% filter(cell_no %in% cell_nos)
+      
+      purrr::map2_dfr(cell_nos, inputs_chunked, function(cell, input) {
+        grow_macroalgae(
           start =        start_ydays_growth,
-          grow_days =    42,
-          temperature =  input$T_input[start_ydays_growth:(start_ydays_growth + 42)],
-          salinity =     input$S_input[start_ydays_growth:(start_ydays_growth + 42)],
-          light =        input$I_input[start_ydays_growth:(start_ydays_growth + 42)],
-          kW =           input$Kd_490[start_ydays_growth:(start_ydays_growth + 42)],
-          velocity =     input$UV_input[start_ydays_growth:(start_ydays_growth + 42)],
-          nitrate =      input$Ni_input[start_ydays_growth:(start_ydays_growth + 42)] + Ni_add,
-          ammonium =     input$Am_input[start_ydays_growth:(start_ydays_growth + 42)] + Am_add,
+          grow_days =    end_ydays_growth-start_ydays_growth,
+          temperature =  input$T_input,
+          salinity =     input$S_input,
+          light =        input$I_input,
+          kW =           input$Kd_490,
+          velocity =     input$UV_input,
+          nitrate =      input$Ni_input + Ni_add,
+          ammonium =     input$Am_input + Amm_add,
           ni_uptake =    "linear",
           am_uptake =    "MM",
-          site_params =  c(
-            hc = 5,
-            farmA = 50 * 50,
-            turbulence = NA,
-            d_top = 2.5,
-            hz = cell_bathy$hz[cell_bathy$cell_no == cell]
-          ), 
-          spec_params =  species_data[[1]], #unlist(species_data),
-          initials =     init_state
-        )
-        mat %>% 
+          site_params =  c(hc = 5, farmA = 50 * 50, turbulence = NA, d_top = 2.5, 
+                           hz = abs(bathy$hz[bathy$cell_no == cell])), 
+          spec_params =  a_armata_gametophyte,
+          initials =     init_state_armata
+        ) %>% 
           as.data.frame() %>% 
           tibble::remove_rownames() %>% 
-          mutate(cell_no = cell)
+          mutate(
+            cell_no = cell,
+            start = start_ydays_growth,
+            lim = case_when(
+              T_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "T_lim",
+              I_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "I_lim",
+              S_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "S_lim",
+              Q_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "Q_lim",
+              Nf_loss >= Ns_to_Nf ~ "Nf_loss",
+              Ns_loss >= (up_Am + up_Ni) ~ "Ns_loss",
+              T ~ NA
+            ),
+            lim = as.factor(lim),
+            species = as.factor("armata")
+          )
       })
     },
-    pattern = cross(map(species_data, init_state), start_ydays_growth, map(BARRA_C2_cell_nos_chunked, cell_inputs_chunked))
+    pattern = cross(map(start_ydays_growth, end_ydays_growth), map(BARRA_C2_cell_nos_chunked, cell_inputs_chunked))
   ),
   tar_target(
-    cell_growth_extra_lims,
+    cell_growth_supp_taxiformis,
     command = {
-      spec_params <- unlist(species_data)
-      cell_growth_extra %>% 
-        mutate(
-          lim = case_when(
-            growth_rate == spec_params['mu'] ~ "No_limit",
-            T_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "T_lim",
-            I_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "I_lim",
-            S_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "S_lim",
-            Q_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "Q_lim",
-            Nf_loss >= Ns_to_Nf ~ "Nf_loss",
-            Ns_loss >= (up_Am+up_Ni) ~ "Ns_loss",
-            T ~ NA
-          ),
-          lim = as.factor(lim),
-          species = species_names,
-          start = min(start_ydays_growth),
-        )
+      cell_nos <- BARRA_C2_cell_nos_chunked[[1]]
+      inputs_chunked <- lapply(cell_inputs_chunked, function(df) {
+        df[df$yday %in% start_ydays_growth:end_ydays_growth, ]
+      })
+      bathy <- cell_bathy %>% filter(cell_no %in% cell_nos)
+      
+      purrr::map2_dfr(cell_nos, inputs_chunked, function(cell, input) {
+        grow_macroalgae(
+          start =        start_ydays_growth,
+          grow_days =    end_ydays_growth-start_ydays_growth,
+          temperature =  input$T_input,
+          salinity =     input$S_input,
+          light =        input$I_input,
+          kW =           input$Kd_490,
+          velocity =     input$UV_input,
+          nitrate =      input$Ni_input + Ni_add,
+          ammonium =     input$Am_input + Amm_add,
+          ni_uptake =    "linear",
+          am_uptake =    "MM",
+          site_params =  c(hc = 5, farmA = 50 * 50, turbulence = NA, d_top = 2.5, 
+                           hz = abs(bathy$hz[bathy$cell_no == cell])), 
+          spec_params =  a_taxiformis_gametophyte,
+          initials =     init_state_taxiformis
+        ) %>% 
+          as.data.frame() %>% 
+          tibble::remove_rownames() %>% 
+          mutate(
+            cell_no = cell,
+            start = start_ydays_growth,
+            lim = case_when(
+              T_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "T_lim",
+              I_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "I_lim",
+              S_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "S_lim",
+              Q_lim == pmin(T_lim, I_lim, S_lim, Q_lim) ~ "Q_lim",
+              Nf_loss >= Ns_to_Nf ~ "Nf_loss",
+              Ns_loss >= (up_Am + up_Ni) ~ "Ns_loss",
+              T ~ NA
+            ),
+            lim = as.factor(lim),
+            species = as.factor("taxiformis")
+          )
+      })
     },
-    pattern = map(cell_growth_extra, cross(map(species_data, species_names), start_ydays_growth, BARRA_C2_cell_nos_chunked))
+    pattern = cross(map(start_ydays_growth, end_ydays_growth), map(BARRA_C2_cell_nos_chunked, cell_inputs_chunked))
   ),
+  
   tar_target(
-    cell_growth_extra_end,
+    cell_growth_supp_end,
     command = {
-      spec_params <- unlist(species_data)
-      all <- cell_growth_extra %>% 
-        mutate(t_start = start_ydays_growth)
-      start <- all %>% 
-        filter(t == t_start) %>% 
-        mutate(TN_hm_start = (Ns + Nf) * hm * 5,
-               TN_start = (Ns + Nf) * 5) %>% 
-        rename(B_dw_start.mg = B_dw.mg) %>% 
-        dplyr::select(cell_no, TN_hm_start, TN_start, B_dw_start.mg)
-      end <- all %>% 
+      start <- cell_growth_supp_armata %>% 
+        filter(t == start) %>% 
+        mutate(hm_start = hm, TN_start = (Ns + Nf) * 5) %>% 
+        rename(B_dw.mg_start = B_dw.mg) %>% 
+        dplyr::select(start, cell_no, hm_start, TN_start, B_dw.mg_start, species)
+      end <- cell_growth_supp_armata %>% 
         filter(t == max(t)) %>% 
-        rename(t_end = t) %>% 
-        mutate(gr_mean = mean(growth_rate)/unname(spec_params['mu']),
-               TN_hm = (Ns + Nf) * hm * 5,
-               TN = (Ns + Nf) * 5) %>% 
-        dplyr::select(t_start, t_end, cell_no, TN, TN_hm, gr_mean, B_dw.mg)
-      merge(start, end, by = "cell_no") %>% 
-        mutate(success = case_when(TN > TN_start ~ T, T ~ F),
-               species = species_names)
+        rename(end = t, B_dw.mg_end = B_dw.mg) %>% 
+        mutate(gr_mean = mean(growth_rate), hm_end = hm, TN_end = (Ns + Nf) * 5) %>% 
+        dplyr::select(start, end, cell_no, hm_end, TN_end, gr_mean, B_dw.mg_end)
+      arma <- merge(start, end, by = c("cell_no", "start")) %>% 
+        mutate(success = case_when(TN_end > TN_start ~ T, T ~ F))
+      
+      start <- cell_growth_supp_taxiformis %>% 
+        filter(t == start) %>% 
+        mutate(hm_start = hm, TN_start = (Ns + Nf) * 5) %>% 
+        rename(B_dw.mg_start = B_dw.mg) %>% 
+        dplyr::select(start, cell_no, hm_start, TN_start, B_dw.mg_start, species)
+      end <- cell_growth_supp_taxiformis %>% 
+        filter(t == max(t)) %>% 
+        rename(end = t, B_dw.mg_end = B_dw.mg) %>% 
+        mutate(gr_mean = mean(growth_rate), hm_end = hm, TN_end = (Ns + Nf) * 5) %>% 
+        dplyr::select(start, end, cell_no, hm_end, TN_end, gr_mean, B_dw.mg_end)
+      taxi <- merge(start, end, by = c("cell_no", "start")) %>% 
+        mutate(success = case_when(TN_end > TN_start ~ T, T ~ F))
+      
+      rbind(arma, taxi)
     },
-    pattern = map(cell_growth_extra, cross(map(species_data, species_names), start_ydays_growth, BARRA_C2_cell_nos_chunked))
+    pattern = map(cell_growth_supp_armata, cell_growth_supp_taxiformis)
   ),
   
   # Scenarios -----------------------------------------------------------------------------------------------------

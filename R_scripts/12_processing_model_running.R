@@ -55,23 +55,23 @@ for (i in seq_along(BARRA_C2_cell_nos_chunked)) {
 gc()
 
 # Cell growth -----------------------------------------------------------------------------------------------------
-# Not currently saving plain cell growth - because there's no indicator within the data of which species is being modelled
-cell_branches <- 2 * length(tar_read(start_ydays_growth)) * length(BARRA_C2_cell_nos_chunked)
-growth_chunks <- seq(0, cell_branches, by = 100)
-for (i in 2:length(growth_chunks)) {
-#   Everything contained in here is also in lims
-#   tar_read(cell_growth, branches = (growth_chunks[i-1]+1):growth_chunks[i]) %>% 
-#     write_parquet(file.path(out_path, "cell_growth", paste0("cell_growth_", fixnum(i-1), ".parquet")))
+cell_branches <- 2 * length(tar_read(start_ydays_growth)) * length(tar_read(BARRA_C2_cell_nos_chunked))
+growth_chunks <- c(seq(0, cell_branches, by = 100), last(cell_branches))
+
+for (i in 1:(length(growth_chunks)-1)) {
+  stt <- growth_chunks[i]+1
+  end <- growth_chunks[i+1]
   
-  tar_read(cell_growth_lims, branches = (growth_chunks[i-1]+1):growth_chunks[i]) %>% 
+  tar_read(cell_growth_lims, branches = stt:end) %>% 
     mutate(species = as.factor(species)) %>% 
-    write_parquet(file.path(out_path, "cell_growth", paste0("cell_growth_lims_", fixnum(i-1), ".parquet"))) %>% 
+    write_parquet(file.path(out_path, "cell_growth", paste0("cell_growth_lims_", fixnum(i), ".parquet"))) %>% 
     dplyr::select(t, growth_rate, start, species, cell_no, lim) %>% 
-    write_parquet(file.path(out_path, "cell_growth", paste0("cell_growth_lims_abbrev_", fixnum(i-1), ".parquet")))
-  
+    write_parquet(file.path(out_path, "cell_growth", paste0("cell_growth_lims_abbrev_", fixnum(i), ".parquet")))
 }
+
 tar_read(cell_growth_end) %>% 
   write_parquet(file.path(out_path, "cell_growth_end.parquet"))
+
 gc()
 
 ## Further process ------------------------------------------------------------------------------------------------

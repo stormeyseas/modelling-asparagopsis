@@ -18,7 +18,7 @@ conflicts_prefer(dplyr::filter(), dplyr::select(), .quiet = T)
 tar_option_set(
   packages = c("dplyr", "macrogrow", "geosphere", "stringr"),
   format = "qs",
-  controller = crew::crew_controller_local(workers = 20, seconds_idle = 120),
+  controller = crew::crew_controller_local(workers = 16, seconds_idle = 120),
   workspace_on_error = T,
   garbage_collection = 500
 )
@@ -39,6 +39,8 @@ Kd_offset <- 0
 
 units::remove_unit("molN")
 units::install_unit(symbol = "molN", def = "14.007 g")
+
+chunk_size <- 150
 
 load(file = file.path("D:", "FRDC-Seaweed-Raw-Data", "BARRA-C2", "BARRA_C2_cell_mask.Rdata"))
 
@@ -130,6 +132,12 @@ list(
       select(cell_no) %>% unlist() %>% unname()
   ),
   
+  tar_target(
+    BARRA_C2_cell_nos_chunked, 
+    split(BARRA_C2_cell_nos, ceiling(seq_along(BARRA_C2_cell_nos)/chunk_size))
+  ),
+  
+  
   # Nitrogen prioritisation ---------------------------------------------------------------------------------------
   # Nutrients -----------------------------------------------------------------------------------------------------
   ## Refstation matching ------------------------------------------------------------------------------------------
@@ -159,19 +167,25 @@ list(
   tar_target(
     N_refstation_data,
     command = {
-      refstation_cellpaired <- match_location(
-        data_coords = refstation_coords,
-        cell_coords = BARRA_C2_cell_coords[BARRA_C2_cell_coords$cell_no == BARRA_C2_cell_nos, ]
-      )
-      df <- refstation_data %>% 
-        filter(code %in% unique(refstation_cellpaired$code)) %>% 
-        merge(refstation_cellpaired, by = c("code", "StationName")) %>% 
-        mutate(weight = 1/dist,
-               cell_no = BARRA_C2_cell_nos)
-      df$weight <- df$weight/sum(unique(df$weight))
-      df %>% mutate(data_source = "refstation")
+      purrr::map_dfr(BARRA_C2_cell_nos_chunked[[1]], function(cell_no) {
+        refstation_cellpaired <- match_location(
+          data_coords = refstation_coords,
+          cell_coords = BARRA_C2_cell_coords[BARRA_C2_cell_coords$cell_no == cell_no, ]
+        )
+        df <- refstation_data %>% 
+          filter(code %in% unique(refstation_cellpaired$code)) %>% 
+          merge(refstation_cellpaired, by = c("code", "StationName")) %>% 
+          mutate(weight = 1/dist,
+                 cell_no = cell_no,
+                 code = as.factor(code),
+                 StationName = as.factor(StationName),
+                 data_source = as.factor("refstation"),
+                 measure = as.factor(measure))
+        df$weight <- df$weight/sum(unique(df$weight))
+        df
+      })
     },
-    pattern = BARRA_C2_cell_nos
+    pattern = BARRA_C2_cell_nos_chunked
   ),
   
   ## Outfall nutrients --------------------------------------------------------------------------------------------
@@ -193,131 +207,189 @@ list(
   tar_target(
     N_outfall_data,
     command = {
-      cell_coords <- BARRA_C2_cell_coords[BARRA_C2_cell_coords$cell_no == BARRA_C2_cell_nos, ]
-      outfall_locs <- outfall_locations
-      outfall_locs$dist <- geosphere::distHaversine(
-        p = c(cell_coords$longitude, cell_coords$latitude), 
-        p2 = as.matrix(cbind(outfall_locs$lon, outfall_locs$lat))
-      ) * 10^-3
-      outfall_locs <- outfall_locs[outfall_locs$dist <= 48,]
-      if (nrow(outfall_locs) == 0) {
-        outfall_locs <- rbind(
-          outfall_locs, data.frame(state = factor(NA), name = factor(NA), lat = as.numeric(NA), lon = as.numeric(NA), dist = as.numeric(NA)))
-      }
-      outfall_locs$cell_no <- BARRA_C2_cell_nos
-      
-      df <- arrow::read_parquet(outfall_data_file) %>%
-        dplyr::filter(name %in% outfall_locs$name) %>% 
-        dplyr::select(c("name", "indicator", "month", "outfall_conc_mgL", "outflow_vol_ML", "quality")) %>%
-        mutate(
-          outfall_conc_mgL = units::set_units(outfall_conc_mgL, "mg L-1"),
-          outfall_conc_mgm3 = units::set_units(outfall_conc_mgL, "mg m-3"),
-          outfall_conc_mgm3 = units::drop_units(outfall_conc_mgm3),
-          prop_vol = units::set_units(outflow_vol_ML, "ML") / cell_vol,
-          prop_vol = units::drop_units(prop_vol)
-        ) %>%
-        dplyr::filter(outfall_conc_mgm3 < 355000) %>% # ~5000 [mg/L]
-        dplyr::select(-c(outfall_conc_mgL, outflow_vol_ML)) %>% 
-        merge(outfall_locs, by = "name") %>% 
-        mutate(weight = 1/dist,
-               value = outfall_conc_mgm3 * prop_vol)
-      df$weight <- df$weight/sum(unique(df$weight))
-      df %>% 
-        mutate(data_source = "outfall")
+      purrr::map_dfr(BARRA_C2_cell_nos_chunked[[1]], function(cell_no) {
+        cell_coords <- BARRA_C2_cell_coords[BARRA_C2_cell_coords$cell_no == cell_no, ]
+        outfall_locs <- outfall_locations
+        outfall_locs$dist <- geosphere::distHaversine(
+          p = c(cell_coords$longitude, cell_coords$latitude), 
+          p2 = as.matrix(cbind(outfall_locs$lon, outfall_locs$lat))
+        ) * 10^-3
+        outfall_locs <- outfall_locs[outfall_locs$dist <= 48,]
+        if (nrow(outfall_locs) == 0) {
+          outfall_locs <- rbind(
+            outfall_locs, data.frame(state = factor(NA), name = factor(NA), lat = as.numeric(NA), lon = as.numeric(NA), dist = as.numeric(NA)))
+        }
+        outfall_locs$cell_no <- cell_no
+        
+        df <- arrow::read_parquet(outfall_data_file) %>%
+          dplyr::filter(name %in% outfall_locs$name) %>% 
+          dplyr::select(c("name", "indicator", "month", "outfall_conc_mgL", "outflow_vol_ML", "quality")) %>%
+          mutate(
+            outfall_conc_mgL = units::set_units(outfall_conc_mgL, "mg L-1"),
+            outfall_conc_mgm3 = units::set_units(outfall_conc_mgL, "mg m-3"),
+            outfall_conc_mgm3 = units::drop_units(outfall_conc_mgm3),
+            prop_vol = units::set_units(outflow_vol_ML, "ML") / cell_vol,
+            prop_vol = units::drop_units(prop_vol),
+            name = as.factor(name)
+          ) %>%
+          dplyr::filter(outfall_conc_mgm3 < 355000) %>% # ~5000 [mg/L]
+          dplyr::select(-c(outfall_conc_mgL, outflow_vol_ML)) %>% 
+          merge(outfall_locs, by = "name") %>% 
+          mutate(weight = 1/dist,
+                 value = outfall_conc_mgm3 * prop_vol)
+        df$weight <- df$weight/sum(unique(df$weight))
+        df %>% 
+          mutate(data_source = as.factor("outfall"))
+      })
     },
-    pattern = BARRA_C2_cell_nos
+    pattern = BARRA_C2_cell_nos_chunked
   ),
   
   ## Prioritisation -----------------------------------------------------------------------------------------------
+  
   tar_target(
-    N_data_prioritised,
+    N_data_combined,
+    description = "Combine outfall and refstation data into single dataframe",
     command = {
       df <- rbind(
         N_outfall_data %>% 
           mutate(yday = lubridate::yday(lubridate::make_date("2023", month, sample(10:20, 1)))) %>% 
           dplyr::select(yday, weight, value, data_source, indicator, cell_no) %>% 
-          mutate(weight = weight/2),
+          mutate(weight = weight/2), # Outfalls are weighted half
         N_refstation_data %>% 
           rename(yday = SampleDate, indicator = measure) %>% 
           dplyr::select(yday, weight, value, data_source, indicator, cell_no) %>% 
           mutate(indicator = factor(indicator, levels = c("Ammonium_mgm3", "Nitrate_mgm3"), labels = c("ammonia", "nitrate_nitrite")))
       )
       df$weight <- df$weight/sum(unique(df$weight))
-      
-      df_1 <- df %>% dplyr::filter(indicator == "nitrate_nitrite")
-      df_2 <- df %>% dplyr::filter(indicator != "nitrate_nitrite")
-      means <- c(Ni = weighted.mean(df_1$value, df_1$weight, na.rm = T),
-                 Am = weighted.mean(df_2$value, df_2$weight, na.rm = T))
-      sds <- c(Ni = sqrt(Hmisc::wtd.var(df_1$value, df_1$weight, na.rm = T)),
-               Am = sqrt(Hmisc::wtd.var(df_2$value, df_2$weight, na.rm = T)))
-                 
-      coefs_1 <- tryCatch(
-        expr = {
-          fit <- nls(
-            formula = as.formula(value ~ a + b * sin((yday * pi + c) / 182.5)),
-            data = df_1,
-            weights = df_1$weight,
-            start = c(a = means["Ni"], b = means["Ni"]*0.1, c = -450),
-            lower = c(a = means["Ni"]*0.5, b = 0, c = -Inf),
-            upper = c(a = means["Ni"]*1.5, b = means["Ni"]*0.95, c = Inf),
-            algorithm = "port"
-          )
-          coefficients(fit)
-        },
-        error = function(e) {c(a = means["Ni"], b = means["Ni"]*0.1, c = -450)}
-      ) %>% magrittr::set_names(c("a", "b", "c"))
-      coefs_2 <- tryCatch(
-        expr = {
-          fit <- nls(
-            formula = as.formula(value ~ a + b * sin((yday * pi + c) / 182.5)),
-            data = df_2,
-            weights = df_2$weight,
-            start = c(a = means["Am"], b = means["Am"]*0.1, c = -450),
-            lower = c(a = means["Am"]*0.5, b = 0, c = -Inf),
-            upper = c(a = means["Am"]*1.5, b = means["Am"]*0.95, c = Inf),
-            algorithm = "port"
-          )
-          coefficients(fit)
-        },
-        error = function(e) {c(a = means["Am"], b = means["Am"]*0.1, c = -450)}
-      ) %>% magrittr::set_names(c("a", "b", "c"))
-      
-      list(
-        data = df,
-        mean = means, 
-        sd = sds,
-        a = c(Ni = unname(coefs_1["a"]), Am = unname(coefs_2["a"])),
-        b = c(Ni = unname(coefs_1["b"]), Am = unname(coefs_2["b"])),
-        c = c(Ni = as.integer(coefs_1["c"]), Am = as.integer(coefs_2["c"]))
-      )
+      df
     },
-    pattern = map(N_outfall_data, N_refstation_data),
-    iteration = "list"
+    pattern = map(N_outfall_data, N_refstation_data)
+  ),
+      
+  tar_target(
+    N_data_prioritised,
+    command = {
+      purrr::map(BARRA_C2_cell_nos_chunked[[1]], function(cell_no) {
+        # Split combined data by measure, get means and sds
+        df_1 <- N_data_combined %>% 
+          dplyr::filter(cell_no == cell_no & indicator == "nitrate_nitrite")
+        df_2 <- N_data_combined %>% 
+          dplyr::filter(cell_no == cell_no & indicator == "ammonia")
+        means <- c(Ni = weighted.mean(df_1$value, df_1$weight, na.rm = T),
+                   Am = weighted.mean(df_2$value, df_2$weight, na.rm = T))
+        sds <- c(Ni = sqrt(Hmisc::wtd.var(df_1$value, df_1$weight, na.rm = T)),
+                 Am = sqrt(Hmisc::wtd.var(df_2$value, df_2$weight, na.rm = T)))
+        
+        # Fit curves for each measure
+        coefs_1 <- tryCatch(
+          expr = {
+            fit <- nls(
+              formula = as.formula(value ~ a + b * sin((yday * pi + c) / 182.5)),
+              data = df_1,
+              weights = df_1$weight,
+              start = c(a = unname(means["Ni"]), b = unname(means["Ni"]), c = -450),
+              lower = c(a = unname(means["Ni"])*0.5, b = unname(means["Ni"])*0.5, c = -Inf),
+              upper = c(a = unname(means["Ni"])*1.5, b = unname(sds["Ni"]), c = Inf),
+              algorithm = "port"
+            )
+            coefficients(fit)
+          },
+          error = function(e) {c(a = unname(means["Ni"]), b = unname(means["Ni"])*0.1, c = -450)}
+        ) %>% magrittr::set_names(c("a", "b", "c"))
+        
+        # df_1 %>% 
+        #   filter(cell_no == sample(df_1$cell_no, size = 1)) %>% 
+        #   mutate(curve = (coefs_1["a"] + coefs_1["b"] * sin((yday * pi + coefs_1["c"]) / 182.5))) %>% 
+        #   ggplot(aes(x = yday, y = value, colour = data_source, size = weight)) +
+        #   geom_point() +
+        #   geom_line(aes(x = yday, y = curve), inherit.aes = F) +
+        #   geom_hline(yintercept = unname(means["Ni"])) +
+        #   geom_hline(yintercept = unname(sds["Ni"]), linetype = "dashed")
+        
+        coefs_2 <- tryCatch(
+          expr = {
+            fit <- nls(
+              formula = as.formula(value ~ a + b * sin((yday * pi + c) / 182.5)),
+              data = df_2,
+              weights = df_2$weight,
+              start = c(a = unname(means["Am"]), b = unname(means["Am"]), c = -450),
+              lower = c(a = unname(means["Am"])*0.5, b = unname(means["Am"])*0.5, c = -Inf),
+              upper = c(a = unname(means["Am"])*1.5, b = unname(sds["Am"]), c = Inf),
+              algorithm = "port"
+            )
+            coefficients(fit)
+          },
+          error = function(e) {c(a = unname(means["Am"]), b = unname(means["Am"])*0.1, c = -450)}
+        ) %>% magrittr::set_names(c("a", "b", "c"))
+        
+        # df_2 %>% 
+        #   mutate(curve = (coefs_2["a"] + coefs_2["b"] * sin((yday * pi + coefs_2["c"]) / 182.5))) %>% 
+        #   ggplot(aes(x = yday, y = value, colour = data_source, size = weight)) +
+        #   geom_point() +
+        #   geom_line(aes(x = yday, y = curve), inherit.aes = F) +
+        #   geom_hline(yintercept = unname(means["Am"])) +
+        #   geom_hline(yintercept = unname(sds["Am"]), linetype = "dashed")
+        
+        dat <- data.frame(
+          mean = means, 
+          sd = sds,
+          a = c(Ni = unname(coefs_1["a"]), Am = unname(coefs_2["a"])),
+          b = c(Ni = unname(coefs_1["b"]), Am = unname(coefs_2["b"])),
+          c = c(Ni = as.integer(coefs_1["c"]), Am = as.integer(coefs_2["c"]))
+        ) %>% 
+          mutate(cell_no = cell_no)
+        dat$measure <- as.factor(rownames(dat))
+        dat %>% tibble::remove_rownames()
+      }) %>% purrr::list_rbind()
+    },
+    pattern = map(BARRA_C2_cell_nos_chunked, N_data_combined)
   ),
   
   # Cell inputs ---------------------------------------------------------------------------------------------------
   tar_target(
-    cell_input_all,
+    cell_inputs_chunked,
     command = {
-      df <- data.frame(
-        cell_no = BARRA_C2_cell_nos,
-        state = BARRA_C2_cell_coords$state[BARRA_C2_cell_coords$cell_no == BARRA_C2_cell_nos],
-        yday = 1:730,
-        I_input  = terra::extract(BARRA_C2_rsdsdir_raster, BARRA_C2_cell_nos) %>% unlist() %>% unname(),
-        T_input  = terra::extract(BARRA_C2_ts_raster, BARRA_C2_cell_nos) %>% unlist() %>% unname(),
-        S_input  = terra::extract(BRAN_salt_raster, BARRA_C2_cell_nos) %>% unlist() %>% unname(),
-        U_input  = terra::extract(BRAN_u_raster, BARRA_C2_cell_nos) %>% unlist() %>% unname(),
-        V_input  = terra::extract(BRAN_v_raster, BARRA_C2_cell_nos) %>% unlist() %>% unname(),
-        Kd_490   = Kd_offset + Kd_scale_factor * fill_nas_weighted(
-          terra::extract(AquaMODIS_Kd_raster, BARRA_C2_cell_nos) %>% unlist() %>% unname()
+      purrr::map(BARRA_C2_cell_nos_chunked[[1]], function(cell_no) {
+        I_input <- terra::extract(BARRA_C2_rsdsdir_raster, cell_no) %>% unlist() %>% unname()
+        T_input <- terra::extract(BARRA_C2_ts_raster, cell_no) %>% unlist() %>% unname()
+        S_input <- terra::extract(BRAN_salt_raster, cell_no) %>% unlist() %>% unname()
+        U_input <- terra::extract(BRAN_u_raster, cell_no) %>% unlist() %>% unname()
+        V_input <- terra::extract(BRAN_v_raster, cell_no) %>% unlist() %>% unname()
+        Kd_490 <- Kd_offset + Kd_scale_factor * fill_nas_weighted(
+          terra::extract(AquaMODIS_Kd_raster, cell_no) %>% unlist() %>% unname()
         )
-      ) %>%
-        mutate(hz = terra::extract(BathyTopo_raster, BARRA_C2_cell_nos) %>% unlist() %>% unname() %>% abs()) %>% 
-        # Construct nutrient curves
-        mutate(
-          Ni_input = N_data_prioritised[["a"]]["Ni"] + N_data_prioritised[["b"]]["Ni"] * sin((yday * pi + N_data_prioritised[["c"]]["Ni"]) / 182.5),
-          Am_input = N_data_prioritised[["a"]]["Am"] + N_data_prioritised[["b"]]["Am"] * sin((yday * pi + N_data_prioritised[["c"]]["Am"]) / 182.5)
-        ) %>%
+        hz <- terra::extract(BathyTopo_raster, cell_no) %>% unlist() %>% unname() %>% abs()
+        
+        N_data <- N_data_prioritised[N_data_prioritised$cell_no == cell_no, ]
+        Ni_input <- N_data$a[N_data$measure == "Ni"] + N_data$b[N_data$measure == "Ni"] * 
+          sin((1:400 * pi + N_data$c[N_data$measure == "Ni"]) / 182.5)
+        Am_input <- N_data$a[N_data$measure == "Am"] + N_data$b[N_data$measure == "Am"] * 
+          sin((1:400 * pi + N_data$c[N_data$measure == "Am"]) / 182.5)
+        
+        df <- data.frame(yday = 1:400,
+                   cell_no = cell_no,
+                   state = as.factor(BARRA_C2_cell_coords$state[BARRA_C2_cell_coords$cell_no == cell_no])) %>%
+          mutate(
+            I_input = c(I_input, I_input[1:35]),
+            T_input = c(T_input, T_input[1:35]),
+            S_input = c(S_input, S_input[1:35]),
+            U_input = c(U_input, U_input[1:35]),
+            V_input = c(V_input, V_input[1:35]),
+            Kd_490 = c(Kd_490, Kd_490[1:35]),
+            Ni_input = Ni_input,
+            Am_input = Am_input,
+            hz = hz
+          )
+        
+        # Add a small amount of random variation
+        df$Ni_input <- df$Ni_input + rnorm(nrow(df), 0, 0.1) * N_data$sd[N_data$measure == "Ni"]
+        df$Am_input <- df$Am_input + rnorm(nrow(df), 0, 0.1) * N_data$sd[N_data$measure == "Am"]
+        df$Ni_input[df$Ni_input < 0] <- 0
+        df$Am_input[df$Am_input < 0] <- 0
+        df
+      }) %>% purrr::list_rbind() %>% 
+        # Cleanup and convert to correct units
         mutate(
           I_input = streamMetabolizer::convert_SW_to_PAR(I_input),
           T_input = T_input %>% units::set_units("kelvin") %>% units::set_units("degree_Celsius") %>% units::drop_units(),
@@ -329,19 +401,12 @@ list(
           )
         ) %>%
         dplyr::select(-U_input, -V_input)
-      
-      df$Ni_input <- df$Ni_input + rnorm(730, 0, 0.1)* N_data_prioritised[["sd"]]["Ni"]
-      df$Am_input <- df$Am_input + rnorm(730, 0, 0.1)* N_data_prioritised[["sd"]]["Am"]
-      df$Ni_input[df$Ni_input < 0] <- 0
-      df$Am_input[df$Am_input < 0] <- 0
-      df
     },
-    pattern = map(BARRA_C2_cell_nos, N_data_prioritised),
-    deployment = "main"
+    pattern = map(BARRA_C2_cell_nos_chunked, N_data_prioritised)
   ),
   tar_target(
     state_input_timeseries,
-    cell_input_all %>% 
+    cell_inputs_chunked %>% 
       group_by(state, yday) %>% 
       reframe(
         I_input_mean = meanna(I_input), I_input_min = minna(I_input), I_input_max = maxna(I_input), I_input_sd = sdna(I_input),
@@ -354,21 +419,22 @@ list(
       )
   ),
   tar_target(
-    cell_input_gapfilled,
+    cell_input_chunked_gapfilled,
     command = {
-      cia <- cell_input_all
-      sia <- state_input_timeseries[state_input_timeseries$state == unique(cia$state), ]
-      if (any(is.na(cia$I_input))) {cia$I_input <- sia$I_input_mean}
-      if (any(is.na(cia$T_input))) {cia$T_input <- sia$T_input_mean}
-      if (any(is.na(cia$S_input))) {cia$S_input <- sia$S_input_mean}
-      if (any(is.na(cia$Kd_490))) {cia$Kd_490 <- sia$Kd_490_mean}
-      if (any(is.na(cia$Ni_input))) {cia$Ni_input <- sia$Ni_input_mean}
-      if (any(is.na(cia$Am_input))) {cia$Am_input <- sia$Am_input_mean}
-      if (any(is.na(cia$UV_input))) {cia$UV_input <- sia$UV_input_mean}
-      cia %>% 
-        dplyr::filter(yday <= 400)
+      purrr::map(BARRA_C2_cell_nos_chunked[[1]], function(cell_no) {
+        cia <- cell_inputs_chunked[cell_inputs_chunked$cell_no == cell_no, ]
+        sia <- state_input_timeseries[state_input_timeseries$state == unique(cia$state), ]
+        if (any(is.na(cia$I_input))) {cia$I_input <- sia$I_input_mean}
+        if (any(is.na(cia$T_input))) {cia$T_input <- sia$T_input_mean}
+        if (any(is.na(cia$S_input))) {cia$S_input <- sia$S_input_mean}
+        if (any(is.na(cia$Kd_490))) {cia$Kd_490 <- sia$Kd_490_mean}
+        if (any(is.na(cia$Ni_input))) {cia$Ni_input <- sia$Ni_input_mean}
+        if (any(is.na(cia$Am_input))) {cia$Am_input <- sia$Am_input_mean}
+        if (any(is.na(cia$UV_input))) {cia$UV_input <- sia$UV_input_mean}
+        cia
+      })
     },
-    pattern = cell_input_all
+    pattern = map(BARRA_C2_cell_nos_chunked, cell_inputs_chunked)
   )
 )
 
