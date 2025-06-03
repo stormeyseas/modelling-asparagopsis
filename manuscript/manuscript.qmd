@@ -22,7 +22,7 @@ format:
         
 execute:
   eval: true
-  cache: true
+  cache: false
 
 knitr: 
   opts_chunk:
@@ -1103,5 +1103,123 @@ Figure 42: Nitrogen removal for different scenarios compared to the base scenari
 # Acknowledgments
 
 # Supplementary material
+
+```{r cell bathy data}
+
+cell_bathy <- file.path(envi_data, "cell_bathy.parquet") %>% 
+  arrow::read_parquet() %>% 
+  mutate(bathy = case_when(bathy <= -200 ~ -200, TRUE ~ bathy)) %>% 
+  merge(cell_coords, by = "cell_no")
+
+lims <- cell_bathy %>% 
+  group_by(state) %>% 
+  reframe(lonmin = min(lon)-0.1, 
+          lonmax = max(lon)+0.1,
+          latmin = min(lat)-0.075,
+          latmax = max(lat)+0.075) %>% 
+  mutate(widest = max(lonmax-lonmin),
+         width = round((lonmax-lonmin)/widest * 6.25, 2),
+         minheight = width * (latmax-latmin)/(lonmax-lonmin))
+```
+
+```{r fig-cell-bathy-NTE}
+#| fig-width: 4
+
+stlims <- lims[lims$state == "NTE", ]
+
+p_bathy <- ggplot(filter(cell_bathy, state == "NTE"), aes(x = lon, y = lat, fill = bathy)) +
+  geom_raster() +
+  geom_sf(data = ozmap_data(data = "states"), inherit.aes = F) +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F) +
+  scale_x_continuous(breaks = seq(100, 160, 2.5)) +
+  scale_y_continuous(breaks = seq(-5, -45, -2)) +
+  scale_fill_viridis_c(limits = c(-200, 0), 
+                       breaks = seq(0, -200, -50), labels = c("0", "50", "100", "150", ">200"),
+                       guide = guide_colorbar(
+                         title = "Depth (m)", 
+                         barheight = 1, barwidth = 20,
+                         title.position = "top",
+                         title.hjust = 0.5
+                       )) +
+  labs(x = "Longitude", y = "Latitude") +
+  prettyplot +
+  theme(legend.position = "top")
+p_bathy
+```
+
+```{r fig-cell-bathy-QLD}
+#| fig-width: 5.5
+#| fig-height: 8
+
+stlims <- lims[lims$state == "QLD", ]
+
+p_bathy %+% filter(cell_bathy, state == "QLD") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F) +
+  scale_x_continuous(breaks = seq(100, 160, 5)) +
+  scale_y_continuous(breaks = seq(-5, -45, -2.5))
+```
+
+```{r fig-cell-bathy-NSW}
+#| fig-width: 3
+#| fig-height: 7
+
+stlims <- lims[lims$state == "NSW", ]
+
+p_bathy %+% filter(cell_bathy, state == "NSW") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F)
+```
+
+```{r fig-cell-bathy-SAU}
+#| fig-width: 4.56
+
+stlims <- lims[lims$state == "SAU", ]
+
+p_bathy %+% filter(cell_bathy, state == "SAU") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F)
+```
+
+```{r fig-cell-bathy-TAS}
+#| fig-width: 3.5
+
+stlims <- lims[lims$state == "TAS", ]
+
+p_bathy %+% filter(cell_bathy, state == "TAS") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F) +
+    scale_x_continuous(breaks = seq(100, 160, 2)) +
+    scale_y_continuous(breaks = seq(-5, -45, -1))
+```
+
+```{r fig-cell-bathy-VIC}
+#| fig-width: 4.5
+
+stlims <- lims[lims$state == "VIC", ]
+
+p_bathy %+% filter(cell_bathy, state == "VIC") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F) +
+    scale_y_continuous(breaks = seq(-5.5, -45, -1))
+```
+
+```{r fig-cell-bathy-WAN}
+#| fig-width: 6.25
+#| fig-height: 10
+
+stlims <- lims[lims$state %in% c("WAN", "WAS"), ]
+xlims <- c(min(stlims$lonmin), max(stlims$lonmax))
+ylims <- c(min(stlims$latmin), max(stlims$latmax))
+
+p_bathy %+% filter(cell_bathy, state %in% c("WAN", "WAS")) +
+  coord_sf(xlim = xlims, ylim = ylims, expand = F)
+```
+
+```{r fig-cell-bathy-WAS}
+#| fig-width: 6.25
+#| fig-height: 10
+
+stlims <- lims[lims$state == "WAS", ]
+
+p_bathy %+% filter(cell_bathy, state == "WAS") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F)
+```
+
 
 # References

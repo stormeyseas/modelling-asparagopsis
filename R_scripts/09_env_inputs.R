@@ -423,7 +423,8 @@ list(
     command = {
       purrr::map(BARRA_C2_cell_nos_chunked[[1]], function(cell_no) {
         cia <- cell_inputs_chunked[cell_inputs_chunked$cell_no == cell_no, ]
-        sia <- state_input_timeseries[state_input_timeseries$state == unique(cia$state), ]
+        state <- unique(cia$state) %>% as.character()
+        sia <- state_input_timeseries[state_input_timeseries$state == state, ]
         if (any(is.na(cia$I_input))) {cia$I_input <- sia$I_input_mean}
         if (any(is.na(cia$T_input))) {cia$T_input <- sia$T_input_mean}
         if (any(is.na(cia$S_input))) {cia$S_input <- sia$S_input_mean}
@@ -432,7 +433,7 @@ list(
         if (any(is.na(cia$Am_input))) {cia$Am_input <- sia$Am_input_mean}
         if (any(is.na(cia$UV_input))) {cia$UV_input <- sia$UV_input_mean}
         cia
-      })
+      }) %>% bind_rows()
     },
     pattern = map(BARRA_C2_cell_nos_chunked, cell_inputs_chunked)
   )
