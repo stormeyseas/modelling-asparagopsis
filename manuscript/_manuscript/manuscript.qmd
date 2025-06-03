@@ -21,7 +21,7 @@ format:
       gutter-width: 2em
         
 execute:
-  eval: false
+  eval: true
   cache: true
 
 knitr: 
@@ -92,9 +92,9 @@ find_read <- function(path, pattern) {
   return(dat)
 }
 
-nitrogen_lab <- expression("Concentration ("*mu*"M N)")
-nitrate_lab <- expression("Nitrate concentration ("*mu*"M NO"[3]*")")
-ammonium_lab <- expression("Ammonium concentration ("*mu*"M NH"[4]^+")")
+nitrogen_lab <- expression("Concentration ( "*mu*"M N)")
+nitrate_lab <- expression("Nitrate concentration ( "*mu*"M NO"[3]*")")
+ammonium_lab <- expression("Ammonium concentration ( "*mu*"M NH"[4]^+")")
 
 # Allows using "units" package to convert between moles and g of nitrogen ONLY
 remove_unit("mol")
@@ -175,14 +175,14 @@ ggplot(cell_coords, aes(x = longitude, y = latitude, fill = state)) +
 ## Environmental inputs {#sec-envinputs}
 
 ```{r all-cell-input-timeseries}
-#| eval: true
-#| cache: false
 
-cell_input_all <- find_read(envi_data, "cell_input_all") %>% 
+T_input <- file.path(envi_data, "cell_input_all") %>% 
+  list.files(full.names = T) %>% 
+  purrr::map(function(fnm) {
+    fnm %>% arrow::read_parquet(col_select = c("cell_no", "state", "yday", "T_input"))
+  }) %>% 
+  bind_rows() %>% 
   mutate(state = factor(state, levels = states_ord, labels = states_lng))
-
-T_input <- cell_input_all %>% 
-  select(cell_no, state, yday, T_input)
 
 (T_means <- T_input %>% 
   group_by(state) %>% 
@@ -191,8 +191,13 @@ T_input <- cell_input_all %>%
           min = min(T_input, na.rm = T)) %>% 
   mutate(variable = "T_input"))
 
-I_input <- cell_input_all %>% 
-  select(cell_no, state, yday, I_input)
+I_input <- file.path(envi_data, "cell_input_all") %>% 
+  list.files(full.names = T) %>% 
+  purrr::map(function(fnm) {
+    fnm %>% arrow::read_parquet(col_select = c("cell_no", "state", "yday", "I_input"))
+  }) %>% 
+  bind_rows() %>% 
+  mutate(state = factor(state, levels = states_ord, labels = states_lng))
 
 (I_means <- I_input %>% 
   group_by(state) %>% 
@@ -201,8 +206,13 @@ I_input <- cell_input_all %>%
           min = min(I_input, na.rm = T)) %>% 
   mutate(variable = "I_input"))
 
-K_input <- cell_input_all %>% 
-  select(cell_no, state, yday, Kd_490)
+K_input <- file.path(envi_data, "cell_input_all") %>% 
+  list.files(full.names = T) %>% 
+  purrr::map(function(fnm) {
+    fnm %>% arrow::read_parquet(col_select = c("cell_no", "state", "yday", "Kd_490"))
+  }) %>% 
+  bind_rows() %>% 
+  mutate(state = factor(state, levels = states_ord, labels = states_lng))
 
 (K_means <- K_input %>% 
   group_by(state) %>% 
@@ -211,8 +221,13 @@ K_input <- cell_input_all %>%
           min = min(Kd_490, na.rm = T)) %>% 
   mutate(variable = "Kd_490"))
 
-S_input <- cell_input_all %>% 
-  select(cell_no, state, yday, S_input)
+S_input <- file.path(envi_data, "cell_input_all") %>% 
+  list.files(full.names = T) %>% 
+  purrr::map(function(fnm) {
+    fnm %>% arrow::read_parquet(col_select = c("cell_no", "state", "yday", "S_input"))
+  }) %>% 
+  bind_rows() %>% 
+  mutate(state = factor(state, levels = states_ord, labels = states_lng))
 
 (S_means <- S_input %>% 
   group_by(state) %>% 
@@ -221,8 +236,13 @@ S_input <- cell_input_all %>%
           min = min(S_input, na.rm = T)) %>% 
   mutate(variable = "S_input"))
 
-UV_input <- cell_input_all %>% 
-  select(cell_no, state, yday, UV_input)
+UV_input <- file.path(envi_data, "cell_input_all") %>% 
+  list.files(full.names = T) %>% 
+  purrr::map(function(fnm) {
+    fnm %>% arrow::read_parquet(col_select = c("cell_no", "state", "yday", "UV_input"))
+  }) %>% 
+  bind_rows() %>% 
+  mutate(state = factor(state, levels = states_ord, labels = states_lng))
 
 (UV_means <- UV_input %>% 
   group_by(state) %>% 
@@ -406,7 +426,7 @@ outfall_locations <- filter(N_locations, type == "outfall")
 ```
 
 ```{r fig-N-data-locations}
-#| eval: false
+#| eval: true
 #| fig-cap: Map showing the locations of recorded outfalls (points, coloured by state) and the IMOS reference stations (stars) used in this analysis.
 
 ggplot(N_locations, aes(x = longitude, y = latitude, color = state, shape = type)) +
@@ -425,30 +445,26 @@ ggplot(N_locations, aes(x = longitude, y = latitude, color = state, shape = type
 ```
 
 ```{r cell-matching}
-#| eval: true
-#| cache: true
-
 all_cells <- sum(totals$cells)
 
-cells_by_station_refstations <- file.path(envi_data, "cells_by_station_refstations.parquet") %>% read_parquet() %>% mutate(ncp = 100*nc/all_cells)
-# stations_by_cell_refstations <- file.path(envi_data, "stations_by_cell_refstations.parquet") %>% read_parquet() %>% mutate(nsp = 100*ns/all_cells)
-cells_by_station_outfalls <- file.path(envi_data, "cells_by_station_outfalls.parquet") %>% read_parquet() %>% mutate(ncp = 100*nc/all_cells)
-stations_by_cell_outfalls <- file.path(envi_data, "stations_by_cell_outfalls.parquet") %>% read_parquet() %>% 
-  group_by(ns) %>% 
-  reframe(nc = n()) %>% 
-  mutate(ncp = 100*nc/all_cells)
+cells_by_station <- file.path(envi_data, "N_data_cells_bystation.parquet") %>% read_parquet()
+cells_by_station_1 <- cells_by_station %>% filter(data_source == "refstation")
+cells_by_station_2 <- cells_by_station %>% filter(data_source != "refstation")
+stations_by_cell <- file.path(envi_data, "N_data_stations_bycell.parquet") %>% read_parquet()
+stations_by_cell_1 <- stations_by_cell %>% filter(data_source == "refstation")
+stations_by_cell_2 <- stations_by_cell %>% filter(data_source != "refstation")
 
-# levels(cells_by_station_refstations$StationName)
+# levels(cells_by_station$name)
 ```
 
 Matching model cells to their two nearest reference stations resulted in 
-`r round(cells_by_station_refstations$ncp[cells_by_station_refstations$StationName == "Darwin"], 1)`% of cells using data from Darwin, 
-`r round(cells_by_station_refstations$ncp[cells_by_station_refstations$StationName == "Kangaroo Island"], 1)`% using data from Kangaroo Island, 
-`r round(cells_by_station_refstations$ncp[cells_by_station_refstations$StationName == "Maria Island"], 1)`% using data from Maria Island, 
-`r round(cells_by_station_refstations$ncp[cells_by_station_refstations$StationName == "North Stradbroke Island"], 1)`% from North Stradbroke Island, 
-`r round(cells_by_station_refstations$ncp[cells_by_station_refstations$StationName == "Port Hacking"], 1)`% using data from Port Hacking, 
-`r round(cells_by_station_refstations$ncp[cells_by_station_refstations$StationName == "Rottnest Island"], 1)`% using data from Rottnest Island, and 
-`r round(cells_by_station_refstations$ncp[cells_by_station_refstations$StationName == "Yongala"], 1)`% using data from Yongala. 
+`r round(100*cells_by_station_1$prop[cells_by_station_1$name == "Darwin"], 1)`% of cells using data from Darwin, 
+`r round(100*cells_by_station_1$prop[cells_by_station_1$name == "Kangaroo Island"], 1)`% using data from Kangaroo Island, 
+`r round(100*cells_by_station_1$prop[cells_by_station_1$name == "Maria Island"], 1)`% using data from Maria Island, 
+`r round(100*cells_by_station_1$prop[cells_by_station_1$name == "North Stradbroke Island"], 1)`% from North Stradbroke Island, 
+`r round(100*cells_by_station_1$prop[cells_by_station_1$name == "Port Hacking"], 1)`% using data from Port Hacking, 
+`r round(100*cells_by_station_1$prop[cells_by_station_1$name == "Rottnest Island"], 1)`% using data from Rottnest Island, and 
+`r round(100*cells_by_station_1$prop[cells_by_station_1$name == "Yongala"], 1)`% using data from Yongala. 
 
 There were 
 `r nrow(outfall_locations[outfall_locations$state == "SAU", ])` outfall stations in South Australia, 
@@ -461,13 +477,13 @@ There were
 `r nrow(outfall_locations[outfall_locations$state == "NTE", ])` in the Northern Territory.
 
 Matching cells to outfall stations within 48 km resulted in 
-`r round(stations_by_cell_outfalls$ncp[stations_by_cell_outfalls$ns == 1],1)`% of cells using data from one outfall site,
-`r round(stations_by_cell_outfalls$ncp[stations_by_cell_outfalls$ns %in% c(2,3)],1)`% of cells using data from two or three sites,
-`r round(stations_by_cell_outfalls$ncp[stations_by_cell_outfalls$ns %in% c(4,5)],1)`% of cells using data from three or four sites,
-`r round(stations_by_cell_outfalls$ncp[stations_by_cell_outfalls$ns %in% c(6:8)],1)`% of cells using data from six to eight sites, and 
-`r round(stations_by_cell_outfalls$ncp[stations_by_cell_outfalls$ns %in% c(9:12)],1)`% of cells using data from nine to twelve sites.
+`r round(100*nrow(stations_by_cell_2[stations_by_cell_2$num == 1,])/all_cells,1)`% of cells using data from one outfall site,
+`r round(100*nrow(stations_by_cell_2[stations_by_cell_2$num %in% c(2,3),])/all_cells,1)`% of cells using data from two or three sites,
+`r round(100*nrow(stations_by_cell_2[stations_by_cell_2$num %in% c(4,5),])/all_cells,1)`% of cells using data from three or four sites,
+`r round(100*nrow(stations_by_cell_2[stations_by_cell_2$num %in% c(6:8),])/all_cells,1)`% of cells using data from six to eight sites, and 
+`r round(100*nrow(stations_by_cell_2[stations_by_cell_2$num %in% c(9:12),])/all_cells,1)`% of cells using data from nine to twelve sites.
 The remaining 
-`r round(100-sum(stations_by_cell_outfalls$ncp),1)`% of cells did not use data from any outfall sites. 
+`r round(100*(all_cells-nrow(stations_by_cell_2))/all_cells,1)`% of cells did not use data from any outfall sites. 
 
 ```{r fig-example-N-input}
 #| eval: true
@@ -476,55 +492,58 @@ The remaining
 BARRA_C2_cell_nos <- file.path(envi_data, "BARRA_C2_cell_nos.qs") %>% qs::qread()
 ind <- which(BARRA_C2_cell_nos == 753076)
 
-combined_data <- envi_data %>% 
+N_data <- find_read(file.path(envi_data, "combined_N_data"), "N_data_combined") %>% 
+  filter(cell_no == 753076) %>% 
+  mutate(value = value %>% set_units("mg m-3") %>% set_units("umol L-1") %>% drop_units())
+
+N_curve <- find_read(file.path(envi_data, "combined_N_data"), "parameter") %>% 
+  filter(cell_no == 753076) 
+N_curve <- data.frame(yday = 1:365) %>% 
+  mutate(ammonia = N_curve$a[N_curve$measure == "Am"] + N_curve$b[N_curve$measure == "Am"] * 
+           sin((yday * pi + N_curve$c[N_curve$measure == "Am"]) / 182.5),
+         nitrate_nitrite = N_curve$a[N_curve$measure == "Ni"] + N_curve$b[N_curve$measure == "Ni"] * 
+           sin((yday * pi + N_curve$c[N_curve$measure == "Ni"]) / 182.5)) %>% 
+  pivot_longer(names_to = "indicator", values_to = "value", cols = c("ammonia", "nitrate_nitrite"), 
+               names_transform = list(indicator = as.factor)) %>% 
+  mutate(value = value %>% set_units("mg m-3") %>% set_units("umol L-1"))
+
+N_input <- file.path(envi_data, "cell_input_all") %>% 
   list.files(full.names = T) %>% 
-  str_subset("combined_N_data") %>% 
-  purrr::map_dfr(arrow::read_parquet) %>% 
-  filter(cell_no == 753076) %>% 
-  mutate(data_source = as.factor(data_source),
-         indicator = factor(indicator, levels = c("nitrate_nitrite", "ammonia")),
-         value = value %>% set_units("mg m-3") %>% set_units("umol L-1"))
-
-cell_input_eg <- cell_input_all %>% 
-  filter(cell_no == 753076) %>% 
+  purrr::map(function(fnm){
+    read_parquet(fnm) %>% 
+      filter(cell_no == 753076)
+  }) %>% 
+  bind_rows() %>% 
   select(yday, Ni_input, Am_input) %>% 
-  pivot_longer(names_to = "indicator", values_to = "value", cols = c(Ni_input, Am_input)) %>% 
-  mutate(indicator = factor(indicator, 
-                            levels = c("Ni_input", "Am_input"), 
-                            labels = c("nitrate_nitrite", "ammonia")),
-         value = value %>% set_units("mg m-3") %>% set_units("umol L-1"))
+  pivot_longer(names_to = "indicator", values_to = "value", cols = c("Ni_input", "Am_input"), 
+               names_transform = list(indicator = as.factor)) %>% 
+  mutate(value = value %>% set_units("mg m-3") %>% set_units("umol L-1") %>% drop_units(),
+         indicator = factor(indicator, levels = c("Am_input", "Ni_input"), labels = levels(N_data$indicator)))
 
-# combined_mean_sd <- envi_data %>% 
-#   list.files(full.names = T) %>% 
-#   str_subset("combined_N_mean_sd") %>% 
-#   purrr::map_dfr(arrow::read_parquet) %>% 
-#   filter(cell_no == 753076)
-# 
-# combined_parameters <- envi_data %>% 
-#   list.files(full.names = T) %>% 
-#   str_subset("combined_N_parameters") %>% 
-#   purrr::map_dfr(arrow::read_parquet) %>% 
-#   filter(cell_no == 753076)
-  
-ggplot(combined_data, 
-       aes(x = yday, y = value, fill = as.factor(data_source), colour = as.factor(data_source), size = weight)) +
+ggplot(N_data, aes(x = yday, y = value, fill = data_source, colour = data_source, size = weight)) +
   geom_point(shape = 21, alpha = 0.35) +
-  facet_wrap(facets = vars(indicator), nrow = 2) +
-  geom_line(data = cell_input_eg, aes(x = yday, y = value), inherit.aes = F) +
-  scale_fill_manual(values = c("orange", "steelblue")) +
-  scale_colour_manual(values = c("orange", "steelblue")) +
+  facet_wrap(facets = vars(indicator), nrow = 2, scales = "free") +
+  geom_line(data = N_input, aes(x = yday, y = value), inherit.aes = F) +
+  scale_fill_manual(values = c("steelblue", "orange")) +
+  scale_colour_manual(values = c("steelblue", "orange")) +
   # scale_y_continuous(limits = c(0, 3.5), breaks = seq(0, 4, 0.5)) +
   env_plot +
   theme(strip.text = element_blank(), aspect.ratio = 0.55) +
+  scale_x_continuous(breaks = seq(0,360,60)) +
   labs(x = "Day of the year", y = nitrogen_lab)
 ```
 
 ```{r Ni input data}
 #| eval: true
-#| cache: false
 
-Ni_input <- cell_input_all %>% 
-  select(cell_no, state, yday, Ni_input)
+Ni_input <- file.path(envi_data, "cell_input_all") %>% 
+  list.files(full.names = T) %>% 
+  purrr::map(function(fnm) {
+    fnm %>% arrow::read_parquet(col_select = c("cell_no", "state", "yday", "Ni_input"))
+  }) %>% 
+  bind_rows() %>% 
+  mutate(state = factor(state, levels = states_ord, labels = states_lng)) %>% 
+  mutate(Ni_input = Ni_input %>% set_units("mg m-3") %>% set_units("umol L-1"))
 
 (Ni_means <- Ni_input %>% 
   group_by(state) %>% 
@@ -548,7 +567,8 @@ with a mean across states of `r round(mean(Ni_means$mean), 2)`.
 Ni_input_state <- Ni_input %>%
   group_by(state, yday) %>% 
   reframe(value = mean(Ni_input, na.rm = T),
-          sd = sd(Ni_input, na.rm = T))
+          sd = sd(Ni_input, na.rm = T)) %>% 
+  mutate(value = value %>% drop_units())
 
 (
   p_input_state_av <- Ni_input_state %>% 
@@ -566,10 +586,15 @@ Ni_input_state <- Ni_input %>%
 
 ```{r Am input data}
 #| eval: true
-#| cache: false
 
-Am_input <- cell_input_all %>% 
-  select(cell_no, state, yday, Am_input)
+Am_input <- file.path(envi_data, "cell_input_all") %>% 
+  list.files(full.names = T) %>% 
+  purrr::map(function(fnm) {
+    fnm %>% arrow::read_parquet(col_select = c("cell_no", "state", "yday", "Am_input"))
+  }) %>% 
+  bind_rows() %>% 
+  mutate(state = factor(state, levels = states_ord, labels = states_lng)) %>% 
+  mutate(Am_input = Am_input %>% set_units("mg m-3") %>% set_units("umol L-1"))
 
 (Am_means <- Am_input %>% 
   group_by(state) %>% 
@@ -586,14 +611,14 @@ with a mean across states of `r round(mean(Am_means$mean), 2)`.
 
 ```{r fig-Am-input}
 #| eval: true
-#| cache: false
 #| fig-cap: |
 #|   Summary of ammonium concentration values across the year within each state, averaged across 2019-2023. Bold lines show the mean across all cells within each state while ribbons show the standard deviation between cells.
 
 Am_input_state <- Am_input %>%
   group_by(state, yday) %>% 
   reframe(value = mean(Am_input, na.rm = T),
-          sd = sd(Am_input, na.rm = T))
+          sd = sd(Am_input, na.rm = T)) %>% 
+  mutate(value = value %>% drop_units())
 
 p_input_state_av %+% Am_input_state +
   # scale_y_continuous(breaks = seq(30, 40, 0.5), limits = c(34, 36.5)) +
@@ -604,7 +629,6 @@ p_input_state_av %+% Am_input_state +
 
 ```{r sens-conditions}
 #| eval: true
-#| cache: false
 
 library(patchwork)
 
@@ -628,7 +652,6 @@ Curves for temperature, surface irradiance, salinity, water velocity, nitrate an
 
 ```{r fig-sens-altogether}
 #| eval: true
-#| cache: false
 #| fig-cap: |
 #|   Average temperatures in each state region (left, see Figure 2 for detail) and the two temperature curves used for sensitivity analysis (high and low, right).
 
@@ -932,15 +955,17 @@ The point of this section is to:
 
 cell_growth_lims_fnms <- file.path(runs_data, "cell_growth") %>% 
   list.files(full.names = T) %>% 
-  str_subset("cell_growth_lims_abbrev")
+  str_subset("cell_growth_abbrev")
 
 # This gives you a daily growth limiter for every cell
-armata_lims <- map_dfr(cell_growth_lims_fnms, function(fnm) {
-  arrow::read_parquet(fnm) %>%
-    filter(species == "armata") %>%
-    mutate(t = as.integer(t), t = case_when(t > 365 ~ t-365, T ~ t)) %>% 
-    distinct(cell_no, species, t, lim)
-})  %>% 
+armata_lims <- cell_growth_lims_fnms %>% 
+  purrr::map(function(fnm) {
+    arrow::read_parquet(fnm) %>%
+      filter(species == "armata") %>%
+      mutate(t = case_when(t > 365 ~ t-365, T ~ t), t = as.integer(t)) %>% 
+      distinct(cell_no, species, t, lim)
+  }) %>% 
+  dplyr::bind_rows() %>% 
   merge(cell_coords, by = "cell_no")
 
 # This gives you the dominant growth limiters per cell per month
@@ -956,7 +981,6 @@ dom_lims <- file.path(runs_data, "cell_growth_dom_lims.parquet") %>%
 
 ```{r armata lims stats}
 #| eval: true
-#| code-summary: See if there are any days where different lims are conflicting (different batches)
 
 stat1 <- armata_lims %>% 
   filter(latitude > -32) %>% 
@@ -975,17 +999,19 @@ stat2_Q <- mean(stat2$perc_days[stat2$lim == "Q_lim"])
 stat2_I <- mean(stat2$perc_days[stat2$lim == "I_lim"])
 ```
 
-For _A. armata_ grown at latitudes > -32$^\circ$, a mean of 
-`r round(100*stat1_T,1)`% of growing days were limited by temperature, 
-`r round(100*stat1_Q,1)`% were limited by nutrients, and 
-`r round(100*stat1_I,1)`% were limited by light. 
+<!-- For _A. armata_ grown at latitudes > -32$^\circ$, a mean of  -->
+<!-- `r round(100*stat1_T,1)`% of growing days were limited by temperature,  -->
+<!-- `r round(100*stat1_Q,1)`% were limited by nutrients, and  -->
+<!-- `r round(100*stat1_I,1)`% were limited by light.  -->
 
-For _A. armata_ grown at latitudes < -32$^\circ$, a mean of 
-`r round(100*stat2_T,1)`% of growing days were limited by temperature, 
-`r round(100*stat2_Q,1)`% were limited by nutrients, and 
-`r round(100*stat2_I,1)`% were limited by light. 
+<!-- For _A. armata_ grown at latitudes < -32$^\circ$, a mean of  -->
+<!-- `r round(100*stat2_T,1)`% of growing days were limited by temperature,  -->
+<!-- `r round(100*stat2_Q,1)`% were limited by nutrients, and  -->
+<!-- `r round(100*stat2_I,1)`% were limited by light.  -->
 
 ```{r fig-growth-lim-armata-hist}
+#| eval: false
+
 (
   p_dom_xy <- armata_lims %>% 
     filter(species == "armata") %>% 
@@ -999,13 +1025,13 @@ For _A. armata_ grown at latitudes < -32$^\circ$, a mean of
     theme_classic() +
     scale_fill_manual(values = lims_pal) +
     scale_colour_manual(values = lims_pal) +
-    labs(x = expression("Cells"*%*%*"number of days"), y = "Latitude")
+    labs(x = expression("Cells " %*% " number of days"), y = "Latitude")
 )
 ```
 
 
 ```{r fig-growth-lim-armata}
-#| eval: true
+#| eval: false
 
 p_dom <- filter(dom_lims, species == "armata" & start == 1) %>% 
   ggplot(aes(x = longitude, y = latitude, fill = lim)) +
@@ -1038,7 +1064,7 @@ p_dom %+% filter(dom_lims, species == "armata" & start == 12)
 #### _Asparagopsis taxiformis_
 
 ```{r fig-growth-lim-taxiformis}
-#| eval: true
+#| eval: false
 
 p_dom <- filter(dom_lims, species == "taxiformis" & start == 1) %>% 
   ggplot(aes(x = longitude, y = latitude, fill = lim)) +
@@ -1071,7 +1097,7 @@ p_dom %+% filter(dom_lims, species == "taxiformis" & start == 12)
 ### Growth ends
 
 ```{r growth end data}
-#| eval: true
+#| eval: false
 
 cell_growth_end <- file.path(runs_data, "cell_growth_end.parquet") %>% 
   read_parquet() %>% 
@@ -1095,12 +1121,132 @@ cell_growth_lims <- find_read(file.path(runs_data, "cell_growth"), "growth_lims"
 
 When compared with the base scenario, all species were able to remove the most nitrogen in the fish farm scenario, almost certainly because of the increase in ammonium concentration from (very low) background levels (Figure 42). *Asparagopsis armata* and *A. taxiformis* consistently removed more nitrogen in the fish farm scenario.
 
-Differences in nitrogen removed by *Asparagopsis* were minimal in the estuary mouth scenario across all states (ranging from -2.1% to +2.5% of base). Similarly, in the shallow bay scenario, *Asparagopsis* was able to remove from 0.4 to 9.5$\times$ more nitrogen. The deep water scenario showed mostly negative but relatively small changes from the base removal, with changes ranging from -36% removal by *A. taxiformis* in New South Wales to +16.2% removed by *A. armata* in northern Western Australia. 
+<!-- Differences in nitrogen removed by *Asparagopsis* were minimal in the estuary mouth scenario across all states (ranging from -2.1% to +2.5% of base). Similarly, in the shallow bay scenario, *Asparagopsis* was able to remove from 0.4 to 9.5$\times$ more nitrogen. The deep water scenario showed mostly negative but relatively small changes from the base removal, with changes ranging from -36% removal by *A. taxiformis* in New South Wales to +16.2% removed by *A. armata* in northern Western Australia.  -->
 
 Figure 42: Nitrogen removal for different scenarios compared to the base scenario. Colours show the different scenarios as fish farm (purple), deep water (green), estuary mouth (orange) and shallow bay (pink).
 
 # Acknowledgments
 
 # Supplementary material
+
+```{r cell bathy data}
+
+cell_bathy <- file.path(envi_data, "cell_bathy.parquet") %>% 
+  arrow::read_parquet() %>% 
+  rename(bathy = hz) %>% 
+  mutate(bathy = -bathy,
+         bathy = case_when(bathy <= -200 ~ -200, TRUE ~ bathy)) %>% 
+  merge(cell_coords, by = "cell_no")
+
+lims <- cell_bathy %>% 
+  group_by(state) %>% 
+  reframe(lonmin = min(longitude)-0.1, 
+          lonmax = max(longitude)+0.1,
+          latmin = min(latitude)-0.075,
+          latmax = max(latitude)+0.075) %>% 
+  mutate(widest = max(lonmax-lonmin),
+         width = round((lonmax-lonmin)/widest * 6.25, 2),
+         minheight = width * (latmax-latmin)/(lonmax-lonmin))
+```
+
+```{r fig-cell-bathy-NTE}
+#| fig-width: 4
+
+stlims <- lims[lims$state == "NTE", ]
+
+p_bathy <- ggplot(filter(cell_bathy, state == "NTE"), aes(x = longitude, y = latitude, fill = bathy)) +
+  geom_raster() +
+  geom_sf(data = ozmap_data(data = "states"), inherit.aes = F) +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F) +
+  scale_x_continuous(breaks = seq(100, 160, 2.5)) +
+  scale_y_continuous(breaks = seq(-5, -45, -2)) +
+  scale_fill_viridis_c(limits = c(-200, 0), 
+                       breaks = seq(0, -200, -50), labels = c("0", "50", "100", "150", ">200"),
+                       guide = guide_colorbar(
+                         title = "Depth (m)", 
+                         barheight = 1, barwidth = 20,
+                         title.position = "top",
+                         title.hjust = 0.5
+                       )) +
+  labs(x = "Longitude", y = "Latitude") +
+  prettyplot +
+  theme(legend.position = "top")
+p_bathy
+```
+
+```{r fig-cell-bathy-QLD}
+#| fig-width: 5.5
+#| fig-height: 8
+
+stlims <- lims[lims$state == "QLD", ]
+
+p_bathy %+% filter(cell_bathy, state == "QLD") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F) +
+  scale_x_continuous(breaks = seq(100, 160, 5)) +
+  scale_y_continuous(breaks = seq(-5, -45, -2.5))
+```
+
+```{r fig-cell-bathy-NSW}
+#| fig-width: 3
+#| fig-height: 7
+
+stlims <- lims[lims$state == "NSW", ]
+
+p_bathy %+% filter(cell_bathy, state == "NSW") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F)
+```
+
+```{r fig-cell-bathy-SAU}
+#| fig-width: 4.56
+
+stlims <- lims[lims$state == "SAU", ]
+
+p_bathy %+% filter(cell_bathy, state == "SAU") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F)
+```
+
+```{r fig-cell-bathy-TAS}
+#| fig-width: 3.5
+
+stlims <- lims[lims$state == "TAS", ]
+
+p_bathy %+% filter(cell_bathy, state == "TAS") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F) +
+    scale_x_continuous(breaks = seq(100, 160, 2)) +
+    scale_y_continuous(breaks = seq(-5, -45, -1))
+```
+
+```{r fig-cell-bathy-VIC}
+#| fig-width: 4.5
+
+stlims <- lims[lims$state == "VIC", ]
+
+p_bathy %+% filter(cell_bathy, state == "VIC") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F) +
+    scale_y_continuous(breaks = seq(-5.5, -45, -1))
+```
+
+```{r fig-cell-bathy-WAN}
+#| fig-width: 6.25
+#| fig-height: 10
+
+stlims <- lims[lims$state %in% c("WAN", "WAS"), ]
+xlims <- c(min(stlims$lonmin), max(stlims$lonmax))
+ylims <- c(min(stlims$latmin), max(stlims$latmax))
+
+p_bathy %+% filter(cell_bathy, state %in% c("WAN", "WAS")) +
+  coord_sf(xlim = xlims, ylim = ylims, expand = F)
+```
+
+```{r fig-cell-bathy-WAS}
+#| fig-width: 6.25
+#| fig-height: 10
+
+stlims <- lims[lims$state == "WAS", ]
+
+p_bathy %+% filter(cell_bathy, state == "WAS") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F)
+```
+
 
 # References
