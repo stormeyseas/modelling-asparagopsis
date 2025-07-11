@@ -1,3 +1,4 @@
+# This script includes various helper functions that are used across all parts of the project
 suppressMessages(suppressWarnings({
   library(tidyr)
   library(dplyr)
@@ -13,12 +14,43 @@ suppressMessages(suppressWarnings({
   library(lubridate)
 }))
 
-fixnum <- function(n, digits = 4) {str_flatten(c(rep("0", digits-nchar(as.character(n))), as.character(n)))}
+fixnum <- function(n, digits = 4) {
+  vapply(n, function(x) {
+    stringr::str_flatten(c(rep("0", digits-nchar(as.character(x))), as.character(x)))
+  }, character(1))
+}
+
 maxna <- function(x) {max(x, na.rm = T)}
 minna <- function(x) {min(x, na.rm = T)}
 meanna <- function(x) {mean(x, na.rm = T)}
 medna <- function(x) {median(x, na.rm = T)}
 sdna <- function(x) {sd(x, na.rm = T)}
+
+cite_pack <- function(package_name) {
+  version <- packageVersion(package_name)
+  paste0("package `", package_name, "` version ", version, " [@", package_name, "]")
+}
+
+cite_packages <- function(packages) {
+  # Generate citations for each package
+  citations <- sapply(packages, function(pkg) {
+    version <- packageVersion(pkg)
+    paste0("`", pkg, "`, version ", version, " [@", pkg, "]")
+  })
+  
+  # Handle different cases based on number of packages
+  if (length(packages) == 1) {
+    return(paste0("package ", citations[1]))
+  } else if (length(packages) == 2) {
+    return(paste0("packages ", citations[1], " and ", citations[2]))
+  } else {
+    # More than 2 packages: use commas and "and" before last
+    first_part <- paste(citations[-length(citations)], collapse = ", ")
+    last_part <- citations[length(citations)]
+    return(paste0("packages ", first_part, ", and ", last_part))
+  }
+}
+
 
 adj_params <- function(params, focus_param, factor) {
   params[focus_param] <- params[focus_param] * factor
@@ -181,3 +213,14 @@ fill_nas_weighted <- function(x, window_size = 8, decay_factor = 0.65) {
   return(result)
 }
 
+fill_raster_gaps <- function(raster, cell, output) {
+  if (any(is.na(output))) {
+    neighbours <- terra::adjacent(raster, cell, "8")[1,]
+    output <- terra::extract(raster, neighbours) %>% colMeans()
+  }
+  if (any(is.na(output))) {
+    neighbours <- terra::adjacent(raster, cell, "16")[1,]
+    output <- terra::extract(raster, neighbours) %>% colMeans()
+  }
+  return(unname(output))
+}

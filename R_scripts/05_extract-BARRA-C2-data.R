@@ -15,15 +15,14 @@ suppressMessages(suppressWarnings({
 }))
 conflicts_prefer(dplyr::filter(), dplyr::select())
 
-fixnum <- function(n, digits = 4) {str_flatten(c(rep("0", digits-nchar(as.character(n))), as.character(n)))}
 clean_memory <- function() {
   gc()
   terra::terraOptions(memfrac=0.5)
 }
 
 # Land area fraction ----------------------------------------------------------------------------------------------
-if (!file.exists(file.path(data_path, "BARRA_C2_cell_mask.Rdata")) | overwrite == T) {
-  land_path <- file.path(data_path, "sftlf_AUST-04_ERA5_historical_hres_BOM_BARRA-C2_v1.nc")
+if (!file.exists(file.path(raw_data_path, "BARRA_C2_cell_mask.Rdata")) | overwrite == T) {
+  land_path <- file.path(raw_data_path, "sftlf_AUST-04_ERA5_historical_hres_BOM_BARRA-C2_v1.nc")
   
   nc <- nc_open(land_path)
   lat <- ncvar_get(nc, "lat")
@@ -38,7 +37,7 @@ if (!file.exists(file.path(data_path, "BARRA_C2_cell_mask.Rdata")) | overwrite =
   rast <- raster(list(x = lon[lon_ind], y = lat[lat_ind], z = land[lon_ind, lat_ind]))
   crs(rast) <- "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"
   
-  # Cut out some extraneous bits before doing the distance calculation
+  # Cut out some extraneous bits before doing the distance calculation to reduce computational load
   cutcells <- cellsFromExtent(rast, extent(148, 155, -18, 0))
   rast[cutcells] <- NA
   cutcells <- cellsFromExtent(rast, extent(115, 125.75, -13.2, 0))
@@ -57,8 +56,8 @@ if (!file.exists(file.path(data_path, "BARRA_C2_cell_mask.Rdata")) | overwrite =
   
   # Create raster of distance from land values, mask out cells too far from the coast
   # dist <- distance(rast) # takes ages, load if you can
-  # save(dist, file = file.path(data_path, "BARRA_C2_fulldist.Rdata"))
-  load(file.path(data_path, "BARRA_C2_fulldist.Rdata"))
+  # save(dist, file = file.path(raw_data_path, "BARRA_C2_fulldist.Rdata"))
+  load(file.path(raw_data_path, "BARRA_C2_fulldist.Rdata"))
   dist[dist > 71*10^3] <- NA
   plot(dist)
   
@@ -72,39 +71,43 @@ if (!file.exists(file.path(data_path, "BARRA_C2_cell_mask.Rdata")) | overwrite =
   #   ggplot(aes(x = x, y = y, fill = layer)) +
   #   geom_raster()
   
-  save(lat, file = file.path(data_path, "BARRA_C2_lats.Rdata"))
-  save(lon, file = file.path(data_path, "BARRA_C2_lons.Rdata"))
-  save(lat_ind, file = file.path(data_path, "BARRA_C2_lat_inds.Rdata"))
-  save(lon_ind, file = file.path(data_path, "BARRA_C2_lon_inds.Rdata"))
-  save(cell_mask, file = file.path(data_path, "BARRA_C2_cell_mask.Rdata"))
+  save(lat, file = file.path(raw_data_path, "BARRA_C2_lats.Rdata"))
+  save(lon, file = file.path(raw_data_path, "BARRA_C2_lons.Rdata"))
+  save(lat_ind, file = file.path(raw_data_path, "BARRA_C2_lat_inds.Rdata"))
+  save(lon_ind, file = file.path(raw_data_path, "BARRA_C2_lon_inds.Rdata"))
+  save(cell_mask, file = file.path(raw_data_path, "BARRA_C2_cell_mask.Rdata"))
   
   nc_close(nc)
   rm(nc)
 } else {
-  load(file.path(data_path, "BARRA_C2_lats.Rdata"))
-  load(file.path(data_path, "BARRA_C2_lons.Rdata"))
-  load(file.path(data_path, "BARRA_C2_lat_inds.Rdata"))
-  load(file.path(data_path, "BARRA_C2_lon_inds.Rdata"))
-  # load(file.path(data_path, "BARRA_C2_cell_mask.Rdata"))
+  load(file.path(raw_data_path, "BARRA_C2_lats.Rdata")) # lat
+  load(file.path(raw_data_path, "BARRA_C2_lons.Rdata")) # lon
+  load(file.path(raw_data_path, "BARRA_C2_lat_inds.Rdata")) # lat_ind
+  load(file.path(raw_data_path, "BARRA_C2_lon_inds.Rdata")) # lon_ind
+  load(file.path(raw_data_path, "BARRA_C2_cell_mask.Rdata")) # cell_mask
 }
 
-# Extract data ----------------------------------------------------------------------------------------------------
-## Shortwave radiation ---------------------------------------------------------------------------------------------
+# Extract raw data ------------------------------------------------------------------------------------------------
+# This script takes the raw (nc) files and turns them into raster files.
+## Shortwave radiation --------------------------------------------------------------------------------------------
 var <- "rsdsdir"
-var_path <- file.path(data_path, var)
-data_file <- list.files(var_path, full.names = T) %>% str_subset("raster", negate = T) %>% str_subset("cell_vals", negate = T)
-dest_path <- file.path(var_path, "rasters")
-dest_path_2 <- file.path(var_path, "raster_means")
-dest_path_3 <- file.path("data_raw", "BARRA-C2", "cell_vals")
+var_path <- file.path(raw_data_path, var)
+var_nc_files <- list.files(var_path, full.names = T, pattern = ".nc")
+var_rasters <- file.path(var_path, "rasters")
+doy_raster_means <- file.path(var_path, "raster_means")
+dir.create(var_rasters)
+dir.create(doy_raster_means)
 
-for (i in 1:length(data_file)) {
-  nc <- nc_open(data_file[i])
+for (i in 1:length(var_nc_files)) {
+  # Open data file
+  nc <- nc_open(var_nc_files[i])
   time_unit <- nc$dim$time$units %>% 
     str_remove("days since ") %>% 
     as.Date()
   times <- ncvar_get(nc, 'time')
   times <- time_unit + lubridate::duration(times, "days")
-  jfiles <- file.path(dest_path, str_c(var, "_", str_replace_all(str_replace_all(times, ":", "-"), " ", "-"), ".tif"))
+  # Create filenames for each timestep
+  jfiles <- file.path(var_rasters, str_c(var, "_", str_replace_all(str_replace_all(times, ":", "-"), " ", "-"), ".tif"))
   
   if (any(!file.exists(jfiles)) | overwrite == T) {
     # Pre-allocate array for efficiency
@@ -125,35 +128,35 @@ for (i in 1:length(data_file)) {
     
     times_df <- data.frame(time = times, index = 1:length(times))
     for (j in seq_along(times_df$index)) {
-      fname <- file.path(dest_path, str_c(var, "_", str_replace_all(str_replace_all(times[j], ":", "-"), " ", "-"), ".tif"))
+      fname <- file.path(var_rasters, str_c(var, "_", str_replace_all(str_replace_all(times[j], ":", "-"), " ", "-"), ".tif"))
       if (!file.exists(fname) | overwrite == T) {
         var_rast <- rast(list(x = lon[lon_ind], y = lat[lat_ind], z = var_data[,,j]))
         crs(var_rast) <- "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"
-        writeRaster(var_rast, fname, overwrite=T)
+        writeRaster(var_rast, fname, overwrite = T)
       }
     }
     clean_memory()
   } else {
     nc_close(nc)
   }
-print(str_c(i, " of ", length(data_file), " raw files done at ", Sys.time()))
+print(str_c(i, " of ", length(var_nc_files), " raw files done at ", Sys.time()))
 }
 
 ## Surface temperature ---------------------------------------------------------------------------------------------
 var <- "ts"
-var_path <- file.path(data_path, var)
-data_file <- list.files(var_path, full.names = T) %>% str_subset("raster", negate = T) %>% str_subset("cell_vals", negate = T)
-dest_path <- file.path(var_path, "rasters")
-dest_path_2 <- file.path(var_path, "raster_means")
+var_path <- file.path(raw_data_path, var)
+var_nc_files <- list.files(var_path, full.names = T, pattern = ".nc")
+var_rasters <- file.path(var_path, "rasters")
+dir.create(var_rasters)
 
-for (i in 1:length(data_file)) {
-  nc <- nc_open(data_file[i])
+for (i in 1:length(var_nc_files)) {
+  nc <- nc_open(var_nc_files[i])
   time_unit <- nc$dim$time$units %>% 
     str_remove("days since ") %>% 
     as.Date()
   times <- ncvar_get(nc, 'time')
   times <- time_unit + lubridate::duration(times, "days")
-  jfiles <- file.path(dest_path, str_c(var, "_", str_replace_all(str_replace_all(times, ":", "-"), " ", "-"), ".tif"))
+  jfiles <- file.path(var_rasters, str_c(var, "_", str_replace_all(str_replace_all(times, ":", "-"), " ", "-"), ".tif"))
   
   if (any(!file.exists(jfiles)) | overwrite == T) {
     # Pre-allocate array for efficiency
@@ -174,102 +177,70 @@ for (i in 1:length(data_file)) {
     
     times_df <- data.frame(time = times, index = 1:length(times))
     for (j in seq_along(times_df$index)) {
-      fname <- file.path(dest_path, str_c(var, "_", str_replace_all(str_replace_all(times[j], ":", "-"), " ", "-"), ".tif"))
+      fname <- file.path(var_rasters, str_c(var, "_", str_replace_all(str_replace_all(times[j], ":", "-"), " ", "-"), ".tif"))
       if (!file.exists(fname) | overwrite == T) {
         var_rast <- rast(list(x = lon[lon_ind], y = lat[lat_ind], z = var_data[,,j]))
         crs(var_rast) <- "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"
-        writeRaster(var_rast, fname, overwrite=T)
+        writeRaster(var_rast, fname, overwrite = T)
       }
     }
     clean_memory()
   } else {
     nc_close(nc)
   }
-  print(str_c(i, " of ", length(data_file), " raw files done at ", Sys.time()))
+  print(str_c(i, " of ", length(var_nc_files), " raw files done at ", Sys.time()))
 }
 
 # Mean over DOYs --------------------------------------------------------------------------------------------------
-## Rsdsdir --------------------------------------------------------------------------------------------------------
-var <- "rsdsdir"
-var_path <- file.path(data_path, var)
-data_file <- list.files(var_path, full.names = T) %>% str_subset("raster", negate = T) %>% str_subset("cell_vals", negate = T)
-dest_path <- file.path(var_path, "rasters")
-dest_path_2 <- file.path(var_path, "raster_means")
+# This takes the raw rasters from all years and creates a mean year for each variable
+vars <- c("rsdsdir", "ts")
 
-rast_files <- data.frame(
-  fnm = list.files(file.path(dest_path), full.names = T),
-  time = list.files(file.path(dest_path))
-) %>% 
-  mutate(time = str_remove(time, str_c(var, "_")),
-         time = str_remove(time, ".tif"),
-         time = lubridate::parse_date_time(time, orders = "%Y-%m-%d-%H-%M-%S"),
-         date = format(time, "%Y-%m-%d"),
-         leap_year = case_when(leap_year(time) ~ T, T ~ F),
-         leap_day = case_when(month(time) == 2 & day(time) == 29 ~ yday(time)-1,
-                              leap_year == T & yday(time) > yday(as.Date("2024-02-28")) ~ yday(time)-1,
-                              T ~ yday(time)))
-
-for (d in unique(rast_files$leap_day)) {
-  fname <- file.path(dest_path_2, str_c(var, "_doy_", fixnum(d), ".tif"))
-  if (!file.exists(fname) | overwrite == T) {
-    rf <- rast_files[rast_files$leap_day == d, ]
-    r_mean <- terra::app(terra::rast(rf$fnm), mean)
-    writeRaster(x = r_mean, filename = fname, overwrite = T)
-    clean_memory()
+for (var in vars) {
+  var_path <- file.path(raw_data_path, var)
+  var_nc_files <- list.files(var_path, full.names = T) %>% 
+    str_subset("raster", negate = T) %>% 
+    str_subset("cell_vals", negate = T)
+  var_rasters <- file.path(var_path, "rasters")
+  doy_raster_means <- file.path(var_path, "raster_means")
+  dir.create(doy_raster_means)
+  
+  rast_files <- data.frame(fnm = list.files(file.path(var_rasters), full.names = T),
+                           time = list.files(file.path(var_rasters))) %>% 
+    mutate(time = str_remove(time, str_c(var, "_")),
+           time = str_remove(time, ".tif"),
+           time = lubridate::parse_date_time(time, orders = "%Y-%m-%d-%H-%M-%S"),
+           date = format(time, "%Y-%m-%d"),
+           leap_year = case_when(leap_year(time) ~ T, T ~ F),
+           leap_day = case_when(month(time) == 2 & day(time) == 29 ~ yday(time)-1,
+                                leap_year == T & yday(time) > yday(as.Date("2024-02-28")) ~ yday(time)-1,
+                                T ~ yday(time)))
+  
+  for (d in unique(rast_files$leap_day)) {
+    fname <- file.path(doy_raster_means, str_c(var, "_doy_", fixnum(d), ".tif"))
+    if (!file.exists(fname) | overwrite == T) {
+      rf <- rast_files[rast_files$leap_day == d, ]
+      r_mean <- terra::app(terra::rast(rf$fnm), mean)
+      writeRaster(x = r_mean, filename = fname, overwrite = T)
+      clean_memory()
+    }
+    print(str_c(var, " file DOY ", fixnum(d), " saved"))
   }
-  print(str_c(var, " file DOY ", fixnum(d), " saved"))
-}
-
-## Ts -------------------------------------------------------------------------------------------------------------
-var <- "ts"
-var_path <- file.path(data_path, var)
-data_file <- list.files(var_path, full.names = T) %>% str_subset("raster", negate = T) %>% str_subset("cell_vals", negate = T)
-dest_path <- file.path(var_path, "rasters")
-dest_path_2 <- file.path(var_path, "raster_means")
-
-rast_files <- data.frame(
-  fnm = list.files(file.path(dest_path), full.names = T),
-  time = list.files(file.path(dest_path))
-) %>% 
-  mutate(time = str_remove(time, str_c(var, "_")),
-         time = str_remove(time, ".tif"),
-         time = lubridate::parse_date_time(time, orders = "%Y-%m-%d-%H-%M-%S"),
-         date = format(time, "%Y-%m-%d"),
-         leap_year = case_when(leap_year(time) ~ T, T ~ F),
-         leap_day = case_when(month(time) == 2 & day(time) == 29 ~ yday(time)-1,
-                              leap_year == T & yday(time) > yday(as.Date("2024-02-28")) ~ yday(time)-1,
-                              T ~ yday(time)))
-
-for (d in unique(rast_files$leap_day)) {
-  fname <- file.path(dest_path_2, str_c(var, "_doy_", fixnum(d), ".tif"))
-  if (!file.exists(fname) | overwrite == T) {
-    rf <- rast_files[rast_files$leap_day == d, ]
-    r_mean <- terra::app(terra::rast(rf$fnm), mean)
-    writeRaster(x = r_mean, filename = fname, overwrite = T)
-    clean_memory()
-  }
-  print(str_c(var, " file DOY ", fixnum(d), " saved"))
 }
 
 # Final rasters ---------------------------------------------------------------------------------------------------
-load(file.path(data_path, "BARRA_C2_cell_mask.Rdata")) # distance from coast cell_mask
 land_rast <- terra::rast(cell_mask)
 writeRaster(x = land_rast, filename = file.path("D:", "FRDC-Seaweed-Raw-Data", "BARRA-C2", "BARRA_C2_land_rast.tif"), overwrite = T)
 
-dest_path_2 <- file.path(data_path, "rsdsdir", "raster_means")
-dest_path_3 <- file.path("data_raw", "BARRA-C2")
-
-fnms <- list.files(dest_path_2, full.names = T)
-BARRA_C2_rsdsdir_data <- terra::rast(fnms)
-writeRaster(x = BARRA_C2_rsdsdir_data, filename = file.path(dest_path_3, "BARRA_C2_rsdsdir_data.tif"), overwrite = T)
+doy_raster_means <- file.path(raw_data_path, "rsdsdir", "raster_means") %>% 
+  list.files(full.names = T)
+BARRA_C2_rsdsdir_data <- terra::rast(doy_raster_means)
+writeRaster(x = BARRA_C2_rsdsdir_data, filename = file.path(final_data_path, "BARRA_C2_rsdsdir_data.tif"), overwrite = T)
 rm(BARRA_C2_rsdsdir_data)
 
-dest_path_2 <- file.path(data_path, "ts", "raster_means")
-dest_path_3 <- file.path("data_raw", "BARRA-C2")
-
-fnms <- list.files(dest_path_2, full.names = T)
-BARRA_C2_ts_data <- terra::rast(fnms)
-writeRaster(x = BARRA_C2_ts_data, filename = file.path(dest_path_3, "BARRA_C2_ts_data.tif"), overwrite = T)
+doy_raster_means <- file.path(raw_data_path, "ts", "raster_means") %>% 
+  list.files(full.names = T)
+BARRA_C2_ts_data <- terra::rast(doy_raster_means)
+writeRaster(x = BARRA_C2_ts_data, filename = file.path(final_data_path, "BARRA_C2_ts_data.tif"), overwrite = T)
 rm(BARRA_C2_ts_data)
 
 
