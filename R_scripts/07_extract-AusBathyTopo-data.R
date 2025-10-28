@@ -19,8 +19,8 @@ suppressMessages(suppressWarnings({
 }))
 conflicts_prefer(dplyr::select(), dplyr::filter(), .quiet = T)
 
-# Load BARRA-C2 cell_mask, RasterLayer
-load(file = file.path("D:", "FRDC-Seaweed-Raw-Data", "BARRA-C2", "BARRA_C2_cell_mask.Rdata"))
+# Load BARRA-R2 cell_mask, RasterLayer
+load(file = file.path("D:", "FRDC-Seaweed-Raw-Data", "BARRA-R2", "BARRA_R2_cell_mask.Rdata"))
 cell_mask <- terra::rast(cell_mask)
 
 bathy <- file.path("D:", "FRDC-Seaweed-Raw-Data", "AusBathyTopo 2024", "AusBathyTopo__Australia__2024_250m_MSL_cog.tif") %>% terra::rast()

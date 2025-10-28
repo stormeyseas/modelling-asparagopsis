@@ -1,3 +1,5 @@
+# This script takes files from the env_inputs targets pipeline and saves them as files, which are easier to load
+
 suppressMessages(suppressWarnings({
   library(targets)
   library(tarchetypes)
@@ -25,66 +27,69 @@ suppressMessages(suppressWarnings({
 # devtools::install_github("https://github.com/stormeyseas/macrogrow.git", quiet = T)
 conflicts_prefer(dplyr::select(), dplyr::mutate(), dplyr::filter(), .quiet = T)
 
-source("R_scripts/00_targets_functions.R")
+source("R_scripts/00_functions.R")
 
-# This script takes files from the targets pipeline and saves them as files, which are easier to load
 Sys.setenv(TAR_PROJECT = "project_inputs")
-out_path <- "data/processed_env_inputs"
+out_path <- here("data/processed_env_inputs")
 
-tar_read(states_bbox) %>% 
+tar_load(states_bbox) 
+states_bbox %>% 
   qsave(file.path(out_path, "states_bbox.qs"))
 
-tar_read(BARRA_C2_cell_coords) %>% 
+tar_load(BARRA_R2_cell_coords) 
+BARRA_R2_cell_coords %>% 
   mutate(state = as.factor(state)) %>% 
-  write_parquet(file.path(out_path, "BARRA_C2_cell_coords.parquet"))
+  write_parquet(file.path(out_path, "BARRA_R2_cell_coords.parquet"))
 
-tar_read(BARRA_C2_cell_nos) %>% 
-  qsave(file.path(out_path, "BARRA_C2_cell_nos.qs"))
+tar_load(BARRA_R2_cell_nos) 
+BARRA_R2_cell_nos %>% 
+  qsave(file.path(out_path, "BARRA_R2_cell_nos.qs"))
 
-BARRA_C2_cell_nos_chunked <- tar_read(BARRA_C2_cell_nos_chunked)
+tar_load(BARRA_R2_cell_nos_chunked)
 
 # # Cell input timeseries processing ------------------------------------------------------------------------------
-for (i in seq_along(BARRA_C2_cell_nos_chunked)) {
-  tar_read(cell_input_chunked_gapfilled, branches = i) %>%
+hz_list <- list()
+for (i in seq_along(BARRA_R2_cell_nos_chunked)) {
+  tar_load(cell_input_chunked_gapfilled, branches = i) 
+
+  hz_list[[i]] <- cell_input_chunked_gapfilled %>% 
+    distinct(cell_no, hz)
+
+  cell_input_chunked_gapfilled %>%
+    dplyr::select(-hz) %>% 
     write_parquet(file.path(out_path, "cell_input_all", paste0("cell_input_all_", fixnum(i), ".parquet")))
 }
-file.path(out_path, "cell_input_all") %>%
-  list.files(full.names = T) %>%
-  purrr::map(., function(fnm) {
-    fnm %>% arrow::read_parquet() %>% distinct(cell_no, hz)
-  }) %>% 
-  dplyr::bind_rows() %>%
+hz_list %>% 
+  bind_rows() %>% 
   write_parquet(file.path(out_path, "cell_bathy.parquet"))
+
+tar_load(missing_data)
+write_parquet(missing_data, file.path(out_path, "missing_data.parquet"))
 
 # N data prioritisation outputs -----------------------------------------------------------------------------------
 stations <- list()
-for (i in seq_along(BARRA_C2_cell_nos_chunked)) {
-  # Get combined data
-  tar_read(N_data_combined, branches = i) %>%
-    write_parquet(file.path(out_path, "combined_N_data", paste0("N_data_combined_", fixnum(i), ".parquet")))
-  
+for (i in seq_along(BARRA_R2_cell_nos_chunked)) {
   tar_read(N_data_prioritised, branches = i) %>%
     write_parquet(file.path(out_path, "combined_N_data", paste0("N_data_parameters_", fixnum(i), ".parquet")))
   
-  # Count how many outfalls/refstations per cell
-  stations[[i]] <- rbind(
-    tar_read(N_outfall_data, branches = i) %>% 
-      distinct(cell_no, data_source, name),
-    tar_read(N_refstation_data, branches = i) %>% 
-      rename(name = StationName) %>% 
-      distinct(cell_no, data_source, name)
-  )
-  print(paste("Branch", i, "of", length(BARRA_C2_cell_nos_chunked), "done"))
+  print(paste("Branch", i, "of", length(BARRA_R2_cell_nos_chunked), "done"))
 }
-total_cells <- tar_read(BARRA_C2_cell_nos) %>% length()
+tar_load(N_data_combined)
+N_data_combined %>%
+  write_parquet(file.path(out_path, "combined_N_data", paste0("N_data_combined.parquet")))
+
+total_cells <- tar_read(BARRA_R2_cell_nos) %>% length()
 
 # rbenchmark::benchmark(
 #   purrr = {purrr::list_rbind(stations)},
 #   dplyr = {dplyr::bind_rows(stations)}
 # )
 
-stations <- stations %>% 
-  dplyr::bind_rows() %>% 
+# Count how many outfalls/refstations per cell
+stations <- tar_read(N_data_combined) %>% 
+  distinct(cell_no, data_source, name)
+
+stations %>% 
   write_parquet(file.path(out_path, paste0("N_data_stations_byname.parquet"))) 
 
 # How many refstations/outfalls are influencing each cell?
@@ -102,7 +107,6 @@ stations %>%
   write_parquet(file.path(out_path, paste0("N_data_cells_bystation.parquet"))) 
 
 # State input timeseries ------------------------------------------------------------------------------------------
-tar_read(state_input_timeseries) %>% 
+tar_load(state_input_timeseries) 
+state_input_timeseries %>% 
   write_parquet(file.path(out_path, "state_input_timeseries.parquet"))
-
-

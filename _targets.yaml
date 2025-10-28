@@ -1,13 +1,13 @@
 # Define params for all species
 project_species:
-  script: R_scripts/02_species.R
+  script: targets_pipelines/species.R
   store: targets_outputs/_species
 
 project_inputs:
-  script: R_scripts/09_env_inputs.R
+  script: targets_pipelines/env_inputs.R
   store: targets_outputs/_env_inputs
 
 project_running:
-  script: R_scripts/11_model_running.R
+  script: targets_pipelines/model_running.R
   store: targets_outputs/_model_running
 

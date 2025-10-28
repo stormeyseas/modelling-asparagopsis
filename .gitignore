@@ -50,3 +50,9 @@ rsconnect/
 .Rproj.user
 
 /.quarto/
+
+# Local-only play-around documents
+XX_*
+*/XX_*
+
+**/*.quarto_ipynb
