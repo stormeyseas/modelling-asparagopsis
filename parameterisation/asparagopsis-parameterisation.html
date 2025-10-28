@@ -152,10 +152,14 @@ window.Quarto = {
   <li><a href="#sec-dry-weight" id="toc-sec-dry-weight" class="nav-link" data-scroll-target="#sec-dry-weight">Dry weight to fresh weight</a></li>
   <li><a href="#sec-height" id="toc-sec-height" class="nav-link" data-scroll-target="#sec-height">Height</a></li>
   <li><a href="#growth-rate-stocking-density" id="toc-growth-rate-stocking-density" class="nav-link" data-scroll-target="#growth-rate-stocking-density">Growth rate &amp; stocking density</a></li>
+  <li><a href="#sec-height" id="toc-sec-height" class="nav-link" data-scroll-target="#sec-height">Height</a></li>
+  <li><a href="#growth-rate-stocking-density" id="toc-growth-rate-stocking-density" class="nav-link" data-scroll-target="#growth-rate-stocking-density">Growth rate &amp; stocking density</a></li>
   </ul></li>
+  <li><a href="#sec-salinity" id="toc-sec-salinity" class="nav-link" data-scroll-target="#sec-salinity">Salinity</a></li>
   <li><a href="#sec-salinity" id="toc-sec-salinity" class="nav-link" data-scroll-target="#sec-salinity">Salinity</a></li>
   <li><a href="#sec-temperature-tetrasporophyte" id="toc-sec-temperature-tetrasporophyte" class="nav-link" data-scroll-target="#sec-temperature-tetrasporophyte">Temperature response</a></li>
   <li><a href="#sec-light-tetrasporophyte" id="toc-sec-light-tetrasporophyte" class="nav-link" data-scroll-target="#sec-light-tetrasporophyte">Light response</a></li>
+  <li><a href="#fragmentation-with-exposure" id="toc-fragmentation-with-exposure" class="nav-link" data-scroll-target="#fragmentation-with-exposure">Fragmentation with exposure</a>
   <li><a href="#fragmentation-with-exposure" id="toc-fragmentation-with-exposure" class="nav-link" data-scroll-target="#fragmentation-with-exposure">Fragmentation with exposure</a>
   <ul class="collapse">
   <li><a href="#velocity" id="toc-velocity" class="nav-link" data-scroll-target="#velocity">Velocity</a></li>
@@ -165,9 +169,15 @@ window.Quarto = {
   <ul class="collapse">
   <li><a href="#sec-final-params" id="toc-sec-final-params" class="nav-link" data-scroll-target="#sec-final-params">All parameters and sources</a></li>
   <li><a href="#sec-save" id="toc-sec-save" class="nav-link" data-scroll-target="#sec-save">Saving data</a></li>
+  <li><a href="#finishing-up" id="toc-finishing-up" class="nav-link" data-scroll-target="#finishing-up">Finishing up</a>
+  <ul class="collapse">
+  <li><a href="#sec-final-params" id="toc-sec-final-params" class="nav-link" data-scroll-target="#sec-final-params">All parameters and sources</a></li>
+  <li><a href="#sec-save" id="toc-sec-save" class="nav-link" data-scroll-target="#sec-save">Saving data</a></li>
   </ul></li>
   <li><a href="#potential-future-extensions" id="toc-potential-future-extensions" class="nav-link" data-scroll-target="#potential-future-extensions">Potential future extensions</a>
+  <li><a href="#potential-future-extensions" id="toc-potential-future-extensions" class="nav-link" data-scroll-target="#potential-future-extensions">Potential future extensions</a>
   <ul class="collapse">
+  <li><a href="#limitation-by-other-nutrients" id="toc-limitation-by-other-nutrients" class="nav-link" data-scroll-target="#limitation-by-other-nutrients">Limitation by other nutrients</a></li>
   <li><a href="#limitation-by-other-nutrients" id="toc-limitation-by-other-nutrients" class="nav-link" data-scroll-target="#limitation-by-other-nutrients">Limitation by other nutrients</a></li>
   </ul></li>
   <li><a href="#code" id="toc-code" class="nav-link" data-scroll-target="#code">Code</a></li>
@@ -222,7 +232,32 @@ window.Quarto = {
 <details class="code-fold">
 <summary>Some global defaults I like to use</summary>
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>out_path <span class="ot">&lt;-</span> <span class="fu">here</span>() <span class="sc">%&gt;%</span> <span class="fu">file.path</span>(<span class="st">"data"</span>)</span>
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>out_path <span class="ot">&lt;-</span> <span class="fu">here</span>() <span class="sc">%&gt;%</span> <span class="fu">file.path</span>(<span class="st">"data"</span>)</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>prettyplot <span class="ot">&lt;-</span> <span class="fu">theme_classic</span>() <span class="sc">+</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="fu">element_text</span>(<span class="at">family =</span> <span class="st">"sans"</span>, <span class="at">size =</span> <span class="dv">12</span>, <span class="at">colour =</span> <span class="st">"black"</span>),</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        <span class="at">axis.title.y =</span> <span class="fu">element_text</span>(<span class="at">vjust =</span> <span class="dv">2</span>),</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>        <span class="at">legend.position =</span> <span class="st">"none"</span>)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>format_sci2 <span class="ot">&lt;-</span> <span class="cf">function</span>(x) {</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">inherits</span>(x, <span class="st">"units"</span>)) {<span class="fu">format_sci</span>(<span class="fu">drop_units</span>(x))} <span class="cf">else</span> {<span class="fu">format_sci</span>(x)}</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="fu">remove_unit</span>(<span class="st">"gDW"</span>)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="fu">install_unit</span>(<span class="st">"gDW"</span>)</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="fu">remove_unit</span>(<span class="st">"gFW"</span>)</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="fu">install_unit</span>(<span class="st">"gFW"</span>)</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="fu">remove_unit</span>(<span class="st">"photons"</span>)</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="fu">install_unit</span>(<span class="st">"photons"</span>)</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a><span class="co"># This allows me to convert between moles and g of nitrogen</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a><span class="fu">remove_unit</span>(<span class="st">"gN"</span>)</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a><span class="fu">install_unit</span>(<span class="st">"gN"</span>)</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a><span class="fu">remove_unit</span>(<span class="st">"molN"</span>)</span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a><span class="fu">install_unit</span>(<span class="st">"molN"</span>, <span class="st">"14.0067 gN"</span>)</span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>S_uM <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">200</span>, <span class="fl">0.5</span>), <span class="st">"umolN L-1"</span>)</span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>S_mg <span class="ot">&lt;-</span> <span class="fu">set_units</span>(S_uM, <span class="st">"mgN m-3"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>prettyplot <span class="ot">&lt;-</span> <span class="fu">theme_classic</span>() <span class="sc">+</span></span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="fu">element_text</span>(<span class="at">family =</span> <span class="st">"sans"</span>, <span class="at">size =</span> <span class="dv">12</span>, <span class="at">colour =</span> <span class="st">"black"</span>),</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        <span class="at">axis.title.y =</span> <span class="fu">element_text</span>(<span class="at">vjust =</span> <span class="dv">2</span>),</span>
@@ -322,13 +357,40 @@ Important
 <span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(torresNO3, <span class="fu">aes</span>(<span class="at">x =</span> S, <span class="at">y =</span> uptake, <span class="at">colour =</span> treatment)) <span class="sc">+</span></span>
 <span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">remove_unit</span>(<span class="st">"molN"</span>) <span class="co"># Torres 2021 only used N-15 so need to readjust the units for this data</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">install_unit</span>(<span class="st">"molN"</span>, <span class="st">"15 gN"</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>torresNO3 <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="fu">file.path</span>(<span class="st">"data_raw"</span>, <span class="st">"sources"</span>, <span class="st">"torres_2021"</span>, <span class="st">"tores-2021-Fig2-B.csv"</span>)) <span class="sc">%&gt;%</span> </span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">uptake =</span> uptake <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN gDW-1 h-1"</span>),</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>         <span class="at">S =</span> S <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN L-1"</span>))</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(torresNO3, <span class="fu">aes</span>(<span class="at">x =</span> S, <span class="at">y =</span> uptake, <span class="at">colour =</span> treatment)) <span class="sc">+</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
 <p><img src="asparagopsis-parameterisation_files/figure-html/torres%202021%20nitrate-1.png" class="img-fluid figure-img" width="672"></p>
 </figure>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="asparagopsis-parameterisation_files/figure-html/torres%202021%20nitrate-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
 </div>
+</div>
+<details class="code-fold">
+<summary>Import Torres et al. (2021) data</summary>
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>lm <span class="ot">&lt;-</span> <span class="fu">lm</span>(uptake <span class="sc">~</span> S, <span class="at">data =</span> <span class="fu">filter</span>(torresNO3, treatment <span class="sc">==</span> <span class="st">"alone"</span>))</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>C_ni_alone <span class="ot">&lt;-</span> <span class="fu">coef</span>(lm)[<span class="st">"(Intercept)"</span>] <span class="sc">%&gt;%</span> <span class="fu">unname</span>() <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN gDW-1 h-1"</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>M_ni_alone <span class="ot">&lt;-</span> <span class="fu">coef</span>(lm)[<span class="st">"S"</span>] <span class="sc">%&gt;%</span> <span class="fu">unname</span>() <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"L h-1 gDW-1"</span>)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>lm <span class="ot">&lt;-</span> <span class="fu">lm</span>(uptake <span class="sc">~</span> S, <span class="at">data =</span> <span class="fu">filter</span>(torresNO3, treatment <span class="sc">!=</span> <span class="st">"alone"</span>))</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>C_ni_combo <span class="ot">&lt;-</span> <span class="fu">coef</span>(lm)[<span class="st">"(Intercept)"</span>] <span class="sc">%&gt;%</span> <span class="fu">unname</span>() <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN gDW-1 h-1"</span>)</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>M_ni_combo <span class="ot">&lt;-</span> <span class="fu">coef</span>(lm)[<span class="st">"S"</span>] <span class="sc">%&gt;%</span> <span class="fu">unname</span>() <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"L h-1 gDW-1"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+<p><span class="citation" data-cites="torres_nitrogen_2021">Torres et al. (<a href="#ref-torres_nitrogen_2021" role="doc-biblioref">2021</a>)</span> did not calculate a linear uptake rate for nitrate when it was tested alone - only a constant rate of 3.2 (or 1.08). In combination nitrate was also taken up at a com They did not offer an explanation beyond the observation that since <em>A. armata</em> did not show an increase in uptake rate with concentration it likely has a limited capacity to use nitrogen. However this does not explain why they provided a slope and constant for linear uptake of nitrate in combination with other N forms, as that also did not show an increase in uptake rate with increasing concentration (although the relationship was not significant). I have decided to use a constant rate of nitrate uptake independent of concentration.</p>
 </div>
 <details class="code-fold">
 <summary>Import Torres et al. (2021) data</summary>
@@ -371,12 +433,48 @@ Important
 <span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>               <span class="at">names_transform =</span> <span class="fu">list</span>(<span class="at">form =</span> as.factor, <span class="at">treatment =</span> as.factor)) <span class="sc">%&gt;%</span> </span>
 <span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">S =</span> <span class="fu">set_units</span>(S_uM, <span class="st">"mgN m-3"</span>),</span>
 <span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a>         <span class="at">uptake =</span> <span class="fu">set_units</span>(uptake, <span class="st">"mgN gDW-1 d-1"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># From Torres et. al. 2021, Table 3</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>M_am_alone <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="fl">0.12</span>, <span class="st">"L h-1 gDW-1"</span>) </span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>C_am_alone <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="fl">10.45</span>, <span class="st">"umolN h-1 gDW-1"</span>)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>M_am_combo <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="fl">0.14</span>, <span class="st">"L h-1 gDW-1"</span>)</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>C_am_combo <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="fl">8.79</span>, <span class="st">"umolN h-1 gDW-1 "</span>)</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>M_aa_alone <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="fl">0.007</span>, <span class="st">"L h-1 gDW-1"</span>)</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>C_aa_alone <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="fl">1.69</span>, <span class="st">"umolN h-1 gDW-1 "</span>)</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>M_aa_combo <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="fl">0.006</span>, <span class="st">"L h-1 gDW-1"</span>)</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>C_aa_combo <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="fl">0.88</span>, <span class="st">"umolN h-1 gDW-1"</span>)</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>torres_uptake <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(S_uM) <span class="sc">%&gt;%</span> </span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">ammonium_alone =</span> <span class="fu">lin_uptake</span>(S_uM, M_am_alone, C_am_alone),</span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>         <span class="at">ammonium_combo =</span> <span class="fu">lin_uptake</span>(S_uM, M_am_combo, C_am_combo),</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>         <span class="at">nitrate_alone =</span> <span class="fu">lin_uptake</span>(S_uM, M_ni_alone, C_ni_alone),</span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>         <span class="at">nitrate_combo =</span> <span class="fu">lin_uptake</span>(S_uM, M_ni_combo, C_ni_combo),</span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>         <span class="at">amacids_alone =</span> <span class="fu">lin_uptake</span>(S_uM, M_aa_alone, C_aa_alone),</span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>         <span class="at">amacids_combo =</span> <span class="fu">lin_uptake</span>(S_uM, M_aa_combo, C_aa_combo)) <span class="sc">%&gt;%</span> </span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="at">cols =</span> <span class="sc">!</span><span class="fu">contains</span>(<span class="st">"S_uM"</span>), </span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a>               <span class="at">names_to =</span> <span class="fu">c</span>(<span class="st">"form"</span>, <span class="st">"treatment"</span>), <span class="at">names_sep =</span> <span class="st">"_"</span>,</span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a>               <span class="at">values_to =</span> <span class="st">"uptake"</span>,</span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>               <span class="at">names_transform =</span> <span class="fu">list</span>(<span class="at">form =</span> as.factor, <span class="at">treatment =</span> as.factor)) <span class="sc">%&gt;%</span> </span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">S =</span> <span class="fu">set_units</span>(S_uM, <span class="st">"mgN m-3"</span>),</span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a>         <span class="at">uptake =</span> <span class="fu">set_units</span>(uptake, <span class="st">"mgN gDW-1 d-1"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 <p>Ammonium is obviously the preferred form of nitrogen uptake in <em>A. armata</em>. Amino acids and nitrate are taken up at approximately the same rate.</p>
 <div class="cell">
 <details class="code-fold">
 <summary>Plot N uptake based on Torres et al. (2021) data</summary>
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>int1 <span class="ot">&lt;-</span> <span class="dv">20</span> <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN L-1"</span>) <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"mgN m-3"</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>int2 <span class="ot">&lt;-</span> <span class="dv">50</span> <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN L-1"</span>) <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"mgN m-3"</span>)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(torres_uptake, <span class="fu">aes</span>(<span class="at">x =</span> S, <span class="at">y =</span> uptake, <span class="at">colour =</span> form)) <span class="sc">+</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>() <span class="sc">+</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="fu">vars</span>(treatment)) <span class="sc">+</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="fu">aes</span>(<span class="at">xintercept =</span> int1), <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="fu">aes</span>(<span class="at">xintercept =</span> int2), <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">y =</span> <span class="st">"Uptake rate"</span>, <span class="at">x =</span> <span class="st">"Substrate concentration"</span>) <span class="sc">+</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  prettyplot <span class="sc">+</span> <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"bottom"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>int1 <span class="ot">&lt;-</span> <span class="dv">20</span> <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN L-1"</span>) <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"mgN m-3"</span>)</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>int2 <span class="ot">&lt;-</span> <span class="dv">50</span> <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN L-1"</span>) <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"mgN m-3"</span>)</span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -402,6 +500,8 @@ Important
 <summary>Reset molN back to 14.0067 g after Torres data</summary>
 <div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">remove_unit</span>(<span class="st">"molN"</span>)</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">install_unit</span>(<span class="st">"molN"</span>, <span class="st">"15 gN"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">remove_unit</span>(<span class="st">"molN"</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">install_unit</span>(<span class="st">"molN"</span>, <span class="st">"15 gN"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 </section>
@@ -411,6 +511,28 @@ Important
 <div class="cell">
 <details class="code-fold">
 <summary>Plot curves based on Schuenhoff et al. (2006) data</summary>
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>V_am <span class="ot">&lt;-</span> <span class="fl">14.85</span> <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN gDW-1 h-1"</span>)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>K_am <span class="ot">&lt;-</span> <span class="fl">10.01</span> <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN L-1"</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>schuen_uptake <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">S =</span> S_uM) <span class="sc">%&gt;%</span> </span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">uptake =</span> <span class="fu">MM_uptake</span>(<span class="at">conc =</span> S_uM, <span class="at">V =</span> V_am, <span class="at">K =</span> K_am),</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>         <span class="at">S =</span> <span class="fu">set_units</span>(S_uM, <span class="st">"mgN m-3"</span>),</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>         <span class="at">uptake =</span> <span class="fu">set_units</span>(uptake, <span class="st">"mgN gDW-1 d-1"</span>),</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>         <span class="at">form =</span> <span class="fu">factor</span>(<span class="st">"ammonium"</span>, <span class="at">levels =</span> <span class="fu">levels</span>(torres_uptake<span class="sc">$</span>form)))</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>int1 <span class="ot">&lt;-</span> <span class="dv">5</span> <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN L-1"</span>) <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"mgN m-3"</span>)</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>int2 <span class="ot">&lt;-</span> <span class="dv">20</span> <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN L-1"</span>) <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"mgN m-3"</span>)</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>int3 <span class="ot">&lt;-</span> <span class="dv">50</span> <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN L-1"</span>) <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"mgN m-3"</span>)</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>schuen_uptake <span class="sc">%&gt;%</span> </span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(S <span class="sc">&lt;=</span> <span class="fu">set_units</span>(<span class="dv">1000</span>, <span class="st">"mgN m-3"</span>)) <span class="sc">%&gt;%</span> </span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> S, <span class="at">y =</span> uptake, <span class="at">colour =</span> form)) <span class="sc">+</span></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>() <span class="sc">+</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="fu">aes</span>(<span class="at">xintercept =</span> int1), <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="fu">aes</span>(<span class="at">xintercept =</span> int2), <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="fu">aes</span>(<span class="at">xintercept =</span> int3), <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">y =</span> <span class="st">"Uptake rate"</span>, <span class="at">x =</span> <span class="st">"Substrate concentration"</span>) <span class="sc">+</span></span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_classic</span>() <span class="sc">+</span> <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"bottom"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>V_am <span class="ot">&lt;-</span> <span class="fl">14.85</span> <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN gDW-1 h-1"</span>)</span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>K_am <span class="ot">&lt;-</span> <span class="fl">10.01</span> <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN L-1"</span>)</span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -462,11 +584,27 @@ Important
 <span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="fu">aes</span>(<span class="at">xintercept =</span> int3), <span class="at">linetype =</span> <span class="st">"dotted"</span>) <span class="sc">+</span></span>
 <span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">y =</span> <span class="st">"Uptake rate"</span>, <span class="at">x =</span> <span class="st">"Substrate concentration"</span>) <span class="sc">+</span></span>
 <span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>  prettyplot <span class="sc">+</span> <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"bottom"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>both_uptake <span class="ot">&lt;-</span> <span class="fu">merge</span>(torres_uptake, schuen_uptake, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"S"</span>, <span class="st">"form"</span>), <span class="at">all =</span> T) <span class="sc">%&gt;%</span> </span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">torres =</span> uptake.x, <span class="at">schuenhoff =</span> uptake.y) <span class="sc">%&gt;%</span> </span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="at">names_to =</span> <span class="st">"source"</span>, <span class="at">values_to =</span> <span class="st">"uptake"</span>, <span class="at">cols =</span> <span class="fu">c</span>(torres, schuenhoff), </span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>               <span class="at">names_transform =</span> <span class="fu">list</span>(<span class="at">source =</span> as.factor))</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>both_uptake <span class="sc">%&gt;%</span> </span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(S_uM <span class="sc">&lt;=</span> <span class="fu">set_units</span>(<span class="dv">55</span>, <span class="st">"umolN L-1"</span>)) <span class="sc">%&gt;%</span> </span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> S, <span class="at">y =</span> uptake, <span class="at">color =</span> form, <span class="at">linetype =</span> source)) <span class="sc">+</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="fl">0.75</span>) <span class="sc">+</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="fu">vars</span>(treatment)) <span class="sc">+</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="fu">aes</span>(<span class="at">xintercept =</span> int1), <span class="at">linetype =</span> <span class="st">"dotted"</span>) <span class="sc">+</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="fu">aes</span>(<span class="at">xintercept =</span> int2), <span class="at">linetype =</span> <span class="st">"dotted"</span>) <span class="sc">+</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="fu">aes</span>(<span class="at">xintercept =</span> int3), <span class="at">linetype =</span> <span class="st">"dotted"</span>) <span class="sc">+</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">y =</span> <span class="st">"Uptake rate"</span>, <span class="at">x =</span> <span class="st">"Substrate concentration"</span>) <span class="sc">+</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>  prettyplot <span class="sc">+</span> <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"bottom"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="asparagopsis-parameterisation_files/figure-html/both%20uptake%20plot-1.png" class="img-fluid figure-img" width="672"></p>
+<figcaption>Uptake of ammonium (green), nitrate (blue) or amino acids (red) by <em>A. armata</em> via Michaelis–Menten kinetics (solid lines) or a linear rate (dashed lines) with increasing substrate concentration (maximum of 30<span class="math inline">\(\mu\)</span>M). Dotted lines show reference concentrations of 5, 20 and 50 <span class="math inline">\(\mu\)</span>M for reference.</figcaption>
 <figcaption>Uptake of ammonium (green), nitrate (blue) or amino acids (red) by <em>A. armata</em> via Michaelis–Menten kinetics (solid lines) or a linear rate (dashed lines) with increasing substrate concentration (maximum of 30<span class="math inline">\(\mu\)</span>M). Dotted lines show reference concentrations of 5, 20 and 50 <span class="math inline">\(\mu\)</span>M for reference.</figcaption>
 </figure>
 </div>
@@ -475,6 +613,19 @@ Important
 <div class="cell">
 <details class="code-fold">
 <summary>Choose which params of those investigated will make it into the model</summary>
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Note that even through MM uptake and linear uptake of ammonium are making it into the model, only one uptake shape can be used per nitrogen form at a time and this is specified in the model run.</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>V_am <span class="ot">&lt;-</span> V_am <span class="co"># From Schuenhoff</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>K_am <span class="ot">&lt;-</span> K_am <span class="co"># From Schuenhoff</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>M_am <span class="ot">&lt;-</span> M_am_combo <span class="co"># From Torres</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>C_am <span class="ot">&lt;-</span> C_am_combo <span class="co"># From Torres</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>M_ni <span class="ot">&lt;-</span> M_ni_combo <span class="co"># From Torres (constant uptake)</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>C_ni <span class="ot">&lt;-</span> C_ni_combo <span class="co"># From Torres</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>M_ot <span class="ot">&lt;-</span> M_aa_combo <span class="co"># From Torres</span></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>C_ot <span class="ot">&lt;-</span> C_aa_combo <span class="co"># From Torres</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Note that even through MM uptake and linear uptake of ammonium are making it into the model, only one uptake shape can be used per nitrogen form at a time and this is specified in the model run.</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>V_am <span class="ot">&lt;-</span> V_am <span class="co"># From Schuenhoff</span></span>
@@ -507,6 +658,33 @@ Important
 <div class="cell">
 <details class="code-fold">
 <summary>Clean up data from <span class="citation" data-cites="mata_direct_2010">Mata, Schuenhoff, and Santos (<a href="#ref-mata_direct_2010" role="doc-biblioref">2010</a>)</span></summary>
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Data from Figure 1</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>mata_data_Y <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="fu">file.path</span>(<span class="st">"data_raw"</span>, <span class="st">"sources"</span>, <span class="st">"mata_2010"</span>, <span class="st">"figure_1.csv"</span>)) <span class="sc">%&gt;%</span> </span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">biomass_yield =</span> <span class="st">`</span><span class="at">Biomass.yield.gDW.m.2.d.1</span><span class="st">`</span>,</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>         <span class="at">TAN_flux =</span> <span class="st">`</span><span class="at">Weekly.average.TAN.flux.umol.L.1.h.1</span><span class="st">`</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">biomass_yield =</span> biomass_yield <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"gDW m-2 d-1"</span>),</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>         <span class="at">TAN_flux =</span> TAN_flux <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN L-1 h-1"</span>),</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>         <span class="at">species =</span> <span class="fu">as.factor</span>(species),</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>         <span class="at">month =</span> <span class="fu">as.factor</span>(month))</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Data from Figure 2</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>mata_data_N <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="fu">file.path</span>(<span class="st">"data_raw"</span>, <span class="st">"sources"</span>, <span class="st">"mata_2010"</span>, <span class="st">"figure_2.csv"</span>)) <span class="sc">%&gt;%</span> </span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">biofiltration =</span> <span class="st">`</span><span class="at">Biofiltration..g.N.m.2.d.1.</span><span class="st">`</span>,</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>         <span class="at">TAN_flux =</span> <span class="st">`</span><span class="at">Weekly.average.TAN.flux.umol.L.1.h.1</span><span class="st">`</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">biofiltration =</span> biofiltration <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"gN m-2 d-1"</span>),</span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>         <span class="at">TAN_flux =</span> TAN_flux <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN L-1 h-1"</span>),</span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>         <span class="at">measure =</span> <span class="fu">as.factor</span>(measure),</span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>         <span class="at">species =</span> <span class="fu">as.factor</span>(species),</span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>         <span class="at">month =</span> <span class="fu">as.factor</span>(month)) <span class="sc">%&gt;%</span> </span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> measure, <span class="at">values_from =</span> biofiltration)</span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot data just to check it matches Mata 2010 - it does</span></span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a><span class="co"># ggplot(data = filter(mata_data_Y, species == "A. armata"), </span></span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a><span class="co">#        aes(x = TAN_flux, y = biomass_yield, colour = month)) +</span></span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_point() </span></span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a><span class="co"># ggplot(data = filter(mata_data_N, species == "A. armata"), </span></span>
+<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a><span class="co">#        aes(x = TAN_flux, y = N_yield, colour = month)) +</span></span>
+<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_point() </span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Data from Figure 1</span></span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>mata_data_Y <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="fu">file.path</span>(<span class="st">"data_raw"</span>, <span class="st">"sources"</span>, <span class="st">"mata_2010"</span>, <span class="st">"figure_1.csv"</span>)) <span class="sc">%&gt;%</span> </span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">biomass_yield =</span> <span class="st">`</span><span class="at">Biomass.yield.gDW.m.2.d.1</span><span class="st">`</span>,</span>
@@ -567,6 +745,34 @@ Important
 <span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>max_N_biom <span class="ot">&lt;-</span> <span class="fu">max</span>(N_biom<span class="sc">$</span>N_biom, <span class="at">na.rm =</span> T)</span>
 <span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a>min_N_biom <span class="ot">&lt;-</span> <span class="fu">min</span>(N_biom<span class="sc">$</span>N_biom, <span class="at">na.rm =</span> T)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Parameters from Figure 1 (May)</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>biom_Y_Vmax <span class="ot">&lt;-</span> <span class="fl">153.6</span> <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"gDW m-2 d-1"</span>) <span class="co"># this is per m2 of a tank with SA=0.23m2</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>biom_Y_Ks <span class="ot">&lt;-</span> <span class="fl">48.4</span> <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN L-1 h-1"</span>)</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>biom_Y <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">flux =</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">2000</span>)) <span class="sc">%&gt;%</span> </span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">flux =</span> flux <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN L-1 h-1"</span>),</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>         <span class="at">biom_yield =</span> <span class="fu">MM_uptake</span>(flux, <span class="at">V =</span> biom_Y_Vmax, <span class="at">K =</span> biom_Y_Ks))</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Parameters from Figure 2 (May, N-yield)</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>N_Y_Vmax <span class="ot">&lt;-</span> <span class="fl">9.5</span> <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"gDW m-2 d-1"</span>)</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>N_Y_Ks <span class="ot">&lt;-</span> <span class="fl">60.3</span> <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN L-1 h-1"</span>)</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>N_Y <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">flux =</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">200</span>)) <span class="sc">%&gt;%</span> </span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">flux =</span> flux <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"umolN L-1 h-1"</span>),</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>         <span class="at">N_yield =</span> <span class="fu">MM_uptake</span>(flux, <span class="at">V =</span> N_Y_Vmax, <span class="at">K =</span> N_Y_Ks))</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot data just to check it matches Mata 2010 - it does</span></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a><span class="co"># ggplot(data = N_Y, aes(x = flux, y = N_yield)) +</span></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_line() + prettyplot</span></span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a><span class="co"># ggplot(data = biom_Y, aes(x = flux, y = biom_yield)) +</span></span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_line() + prettyplot</span></span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>N_biom <span class="ot">&lt;-</span> <span class="fu">merge</span>(biom_Y, N_Y, <span class="at">by =</span> <span class="st">"flux"</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">N_biom =</span> N_yield<span class="sc">/</span>biom_yield)</span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a><span class="co"># ggplot(N_biom, aes(x = biom_yield, y = N_biom)) +</span></span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_point()</span></span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>max_N_biom <span class="ot">&lt;-</span> <span class="fu">max</span>(N_biom<span class="sc">$</span>N_biom, <span class="at">na.rm =</span> T)</span>
+<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a>min_N_biom <span class="ot">&lt;-</span> <span class="fu">min</span>(N_biom<span class="sc">$</span>N_biom, <span class="at">na.rm =</span> T)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 <!-- Using the parameters from @mata_direct_2010, I estimate a maximum N-content of 5.9% and a minimum N-content of 4.98%. -->
@@ -579,6 +785,16 @@ Important
 <div class="cell">
 <details class="code-fold">
 <summary>Range of protein concentrations</summary>
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>P_range_taxi <span class="ot">&lt;-</span> <span class="fu">sort</span>(<span class="fu">c</span>(<span class="fl">22.69</span>, <span class="fl">23.76</span>, <span class="fl">18.2</span>, <span class="fl">7.5</span>)) <span class="co"># Asparagopsis taxiformis</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>P_range_arma <span class="ot">&lt;-</span> <span class="fu">sort</span>(<span class="fu">c</span>(<span class="fl">24.23</span>, <span class="fl">15.2</span>, <span class="fl">10.94</span>)) <span class="co"># Asparagopsis armata</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>N_conv_aspara <span class="ot">&lt;-</span> <span class="fl">5.63</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>N_range_taxi_aspara <span class="ot">&lt;-</span> P_range_taxi<span class="sc">/</span>N_conv_aspara <span class="co"># Asparagopsis taxiformis</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>N_range_arma_aspara <span class="ot">&lt;-</span> P_range_arma<span class="sc">/</span>N_conv_aspara <span class="co"># Asparagopsis armata</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>N_conv_reds <span class="ot">&lt;-</span> <span class="fl">5.1</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>N_range_taxi_reds <span class="ot">&lt;-</span> P_range_taxi<span class="sc">/</span>N_conv_reds <span class="co"># Asparagopsis taxiformis</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>N_range_arma_reds <span class="ot">&lt;-</span> P_range_arma<span class="sc">/</span>N_conv_reds <span class="co"># Asparagopsis armata</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>P_range_taxi <span class="ot">&lt;-</span> <span class="fu">sort</span>(<span class="fu">c</span>(<span class="fl">22.69</span>, <span class="fl">23.76</span>, <span class="fl">18.2</span>, <span class="fl">7.5</span>)) <span class="co"># Asparagopsis taxiformis</span></span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>P_range_arma <span class="ot">&lt;-</span> <span class="fu">sort</span>(<span class="fu">c</span>(<span class="fl">24.23</span>, <span class="fl">15.2</span>, <span class="fl">10.94</span>)) <span class="co"># Asparagopsis armata</span></span>
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -664,8 +880,13 @@ Table&nbsp;1: Observed protein concentrations in <em>Asparagopsis</em> species
 <span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>Q_min <span class="ot">&lt;-</span> <span class="fu">set_units</span>(N_min, <span class="st">"mgN gDW-1"</span>)</span>
 <span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>N_max <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="fl">0.065</span>, <span class="st">"gN gDW-1"</span>) <span class="co"># Schuenhoff 2006</span></span>
 <span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>Q_max <span class="ot">&lt;-</span> <span class="fu">set_units</span>(N_max, <span class="st">"mgN gDW-1"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>N_min <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="fu">min</span>(P_range_arma<span class="sc">/</span><span class="dv">100</span>)<span class="sc">/</span>N_conv_aspara, <span class="st">"gN gDW-1"</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>Q_min <span class="ot">&lt;-</span> <span class="fu">set_units</span>(N_min, <span class="st">"mgN gDW-1"</span>)</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>N_max <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="fl">0.065</span>, <span class="st">"gN gDW-1"</span>) <span class="co"># Schuenhoff 2006</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>Q_max <span class="ot">&lt;-</span> <span class="fu">set_units</span>(N_max, <span class="st">"mgN gDW-1"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
+<p>This gives a minimum N of 1.94% (a <span class="math inline">\(Q_{min}\)</span> of 19.43 mg gDW<span class="math inline">\(^{-1}\)</span>) and a maximum N-content of 6.5% (a <span class="math inline">\(Q_{max}\)</span> of 65 mg gDW<span class="math inline">\(^{-1}\)</span>), which is a relatively high value for macroalgae.</p>
 <p>This gives a minimum N of 1.94% (a <span class="math inline">\(Q_{min}\)</span> of 19.43 mg gDW<span class="math inline">\(^{-1}\)</span>) and a maximum N-content of 6.5% (a <span class="math inline">\(Q_{max}\)</span> of 65 mg gDW<span class="math inline">\(^{-1}\)</span>), which is a relatively high value for macroalgae.</p>
 </section>
 </section>
@@ -706,9 +927,12 @@ Table&nbsp;1: Observed protein concentrations in <em>Asparagopsis</em> species
 <details class="code-fold">
 <summary>Choose which params of those investigated will make it into the model</summary>
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>DWWW <span class="ot">&lt;-</span> <span class="fu">mean</span>(<span class="fu">c</span>(DWWW_nunes_arma, DWWW_nunes_taxi))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>DWWW <span class="ot">&lt;-</span> <span class="fu">mean</span>(<span class="fu">c</span>(DWWW_nunes_arma, DWWW_nunes_taxi))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 </section>
+<section id="sec-height" class="level2">
+<h2 class="anchored" data-anchor-id="sec-height">Height</h2>
 <section id="sec-height" class="level2">
 <h2 class="anchored" data-anchor-id="sec-height">Height</h2>
 <p>Within the model, “height” does not indicate height exactly, rather it indicates how much of the available space is being taken up by the macroalgae. This combines with density (mg m<span class="math inline">\(^{-3}\)</span>, i.e.&nbsp;growth) to indicate how much light and nutrients the macroalgae has access to. For example:</p>
@@ -716,6 +940,20 @@ Table&nbsp;1: Observed protein concentrations in <em>Asparagopsis</em> species
 <li>a macroalgae with a high growth rate but a low height-increase rate (e.g.&nbsp;an <em>Asparagopsis</em> tetrasporophyte) will be more dense in a smaller volume, potentially having higher self-shading rates and decreased access to nutrients</li>
 <li>a macroalgae with a low growth rate and a high height-increase rate (e.g.&nbsp;<em>Ecklonia</em>) will be less dense in a larger volume, potentially lower self-shading rates and increased access to nutrients</li>
 </ul>
+<p><span class="citation" data-cites="zanolla_size_2018">Zanolla, Altamirano, De La Rosa, et al. (<a href="#ref-zanolla_size_2018" role="doc-biblioref">2018</a>)</span> reported that <em>A, taxiformis</em> gametophyte branches had a maximum length of ~26 cm at ~115 g DW m<span class="math inline">\(^{-2}\)</span>.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Height stats from <span class="citation" data-cites="zanolla_size_2018">Zanolla, Altamirano, De La Rosa, et al. (<a href="#ref-zanolla_size_2018" role="doc-biblioref">2018</a>)</span></summary>
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>sizedis <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="dv">115</span>,<span class="st">"gDW m-2"</span>)<span class="sc">*</span><span class="fu">set_units</span>(<span class="fl">0.26</span>,<span class="st">"m-1"</span>)</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>sizedisN <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="fu">drop_units</span>(sizedis<span class="sc">*</span><span class="fl">0.06</span>), <span class="st">"g m-3"</span>)</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>sizedisN <span class="ot">&lt;-</span> <span class="fu">set_units</span>(sizedisN, <span class="st">"mg m-3"</span>)</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>sizedis2 <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="dv">115</span>,<span class="st">"gDW m-2"</span>)<span class="sc">*</span><span class="fu">set_units</span>(<span class="fl">0.26</span>,<span class="st">"m-1"</span>)</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>sizedisN2 <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="fu">drop_units</span>(sizedis2<span class="sc">*</span><span class="fl">0.06</span>), <span class="st">"g m-3"</span>)</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>sizedisN2 <span class="ot">&lt;-</span> <span class="fu">set_units</span>(sizedisN2, <span class="st">"mg m-3"</span>)<span class="sc">/</span><span class="dv">10</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+<p>This is equivalent to approximately 29.9 g DW m<span class="math inline">\(^{-3}\)</span> for a single plant to reach maximum height, or about 1794 g N mg<span class="math inline">\(^{-3}\)</span>. <span class="citation" data-cites="zanolla_size_2018">Zanolla, Altamirano, De La Rosa, et al. (<a href="#ref-zanolla_size_2018" role="doc-biblioref">2018</a>)</span> found that smaller size classes were more abundant than higher classes, indicating that the gametophyte prioritises new shoots (lateral growth) over increasing height (vertical growth). If we assume that 5 plants are growing within 1 m<span class="math inline">\(^{-3}\)</span>, then the maximum height will be reached much earlier, at 179.4 g N mg<span class="math inline">\(^{-3}\)</span>.</p>
 <p><span class="citation" data-cites="zanolla_size_2018">Zanolla, Altamirano, De La Rosa, et al. (<a href="#ref-zanolla_size_2018" role="doc-biblioref">2018</a>)</span> reported that <em>A, taxiformis</em> gametophyte branches had a maximum length of ~26 cm at ~115 g DW m<span class="math inline">\(^{-2}\)</span>.</p>
 <div class="cell">
 <details class="code-fold">
@@ -757,12 +995,22 @@ Table&nbsp;1: Observed protein concentrations in <em>Asparagopsis</em> species
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-height-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 Figure&nbsp;2: Algae height with Nf using spec_params = c(h_a = 3850, h_b = 1.75, h_c = 0.001, h_max = 0.26). The dashed line shows the point at which max height is reached (1794 g N m<span class="math inline">\(^{-3}\)</span>)
 </figcaption>
+<div id="fig-height" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-height-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="asparagopsis-parameterisation_files/figure-html/fig-height-1.png" class="img-fluid figure-img" width="672">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-height-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;2: Algae height with Nf using spec_params = c(h_a = 3850, h_b = 1.75, h_c = 0.001, h_max = 0.26). The dashed line shows the point at which max height is reached (1794 g N m<span class="math inline">\(^{-3}\)</span>)
+</figcaption>
 </figure>
 </div>
 </div>
 </div>
 </section>
 <section id="growth-rate-stocking-density" class="level2">
+<h2 class="anchored" data-anchor-id="growth-rate-stocking-density">Growth rate &amp; stocking density</h2>
+<p><span class="citation" data-cites="zanolla_size_2018">Zanolla, Altamirano, De La Rosa, et al. (<a href="#ref-zanolla_size_2018" role="doc-biblioref">2018</a>)</span>? <span class="citation" data-cites="wright_asexual_2022">Wright et al. (<a href="#ref-wright_asexual_2022" role="doc-biblioref">2022</a>)</span>?</p>
 <h2 class="anchored" data-anchor-id="growth-rate-stocking-density">Growth rate &amp; stocking density</h2>
 <p><span class="citation" data-cites="zanolla_size_2018">Zanolla, Altamirano, De La Rosa, et al. (<a href="#ref-zanolla_size_2018" role="doc-biblioref">2018</a>)</span>? <span class="citation" data-cites="wright_asexual_2022">Wright et al. (<a href="#ref-wright_asexual_2022" role="doc-biblioref">2022</a>)</span>?</p>
 <p><span class="citation" data-cites="schuenhoff_tetrasporophyte_2006">Schuenhoff, Mata, and Santos (<a href="#ref-schuenhoff_tetrasporophyte_2006" role="doc-biblioref">2006</a>)</span> investigated the optimal stocking density for <em>A. armata</em> in spring and winter at a high water exchange rate (2 Vol hr<span class="math inline">\(^{-1}\)</span>). Yield was determined via:</p>
@@ -773,6 +1021,33 @@ Y(g DW m^{−2} week^{−1}) = \frac{N_t (g FW) − N_0 (g FW)}{t (weeks) \times
 <p>Maximum yields in <span class="citation" data-cites="schuenhoff_tetrasporophyte_2006">Schuenhoff, Mata, and Santos (<a href="#ref-schuenhoff_tetrasporophyte_2006" role="doc-biblioref">2006</a>)</span> in both seasons was achieved at a stocking density of 5 g FW l<span class="math inline">\(^{-1}\)</span>, but the yield in spring was higher than in winter (~700 vs ~520 g DW m<span class="math inline">\(^{-2}\)</span> week<span class="math inline">\(^{-1}\)</span>). These can be converted to mg N m<span class="math inline">\(^{-2}\)</span> d<span class="math inline">\(^{-1}\)</span>:</p>
 <div class="cell">
 <details class="code-fold">
+<summary>Get <span class="citation" data-cites="schuenhoff_tetrasporophyte_2006">Schuenhoff, Mata, and Santos (<a href="#ref-schuenhoff_tetrasporophyte_2006" role="doc-biblioref">2006</a>)</span> starting condition and yield data</summary>
+<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># schuenhoff_tetrasporophyte_2006 dry to wet conversion</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="fu">remove_unit</span>(<span class="st">"gWW"</span>)</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="fu">install_unit</span>(<span class="st">"gWW"</span>, <span class="st">"0.25 gDW"</span>)</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>spring <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="fu">file.path</span>(<span class="st">"data_raw"</span>, <span class="st">"sources"</span>, <span class="st">"schuenhoff_2006"</span>, <span class="st">"schuenhoff_2006_Fig1_spring-data.csv"</span>), <span class="at">header =</span> F) <span class="sc">%&gt;%</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">season =</span> <span class="st">"spring"</span>)</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>winter <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="fu">file.path</span>(<span class="st">"data_raw"</span>, <span class="st">"sources"</span>, <span class="st">"schuenhoff_2006"</span>, <span class="st">"schuenhoff_2006_Fig1_winter-data.csv"</span>), <span class="at">header =</span> F) <span class="sc">%&gt;%</span></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">season =</span> <span class="st">"winter"</span>)</span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>N_perc <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="fl">0.065</span>, <span class="st">"gN gDW-1"</span>)</span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>C_perc <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="fl">0.355</span>, <span class="st">"gN gDW-1"</span>) <span class="co"># C:N ratio (or C% of tissue) is not currently used within the model but might be useful later</span></span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a><span class="co"># initial starting value</span></span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>stock_dens <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="dv">5</span>, <span class="st">"gWW L-1"</span>) <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"gDW m-3"</span>)</span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>stock_dens <span class="ot">&lt;-</span> (stock_dens<span class="sc">*</span>N_perc) <span class="sc">%&gt;%</span> <span class="fu">set_units</span>(<span class="st">"mgN m-3"</span>)</span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a>yield_spring <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="dv">700</span>, <span class="st">"gDW m-2 week-1"</span>)</span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a>yield_spring <span class="ot">&lt;-</span> yield_spring<span class="sc">/</span><span class="fu">set_units</span>(<span class="fl">0.48</span>, <span class="st">"m"</span>)</span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a>yield_spring <span class="ot">&lt;-</span> <span class="fu">set_units</span>(yield_spring<span class="sc">*</span>N_perc, <span class="st">"mgN m-3 d-1"</span>)</span>
+<span id="cb19-20"><a href="#cb19-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-21"><a href="#cb19-21" aria-hidden="true" tabindex="-1"></a>yield_winter <span class="ot">&lt;-</span> <span class="fu">set_units</span>(<span class="dv">520</span>, <span class="st">"gDW m-2 week-1"</span>)</span>
+<span id="cb19-22"><a href="#cb19-22" aria-hidden="true" tabindex="-1"></a>yield_winter <span class="ot">&lt;-</span> yield_winter<span class="sc">/</span><span class="fu">set_units</span>(<span class="fl">0.48</span>, <span class="st">"m"</span>)</span>
+<span id="cb19-23"><a href="#cb19-23" aria-hidden="true" tabindex="-1"></a>yield_winter <span class="ot">&lt;-</span> <span class="fu">set_units</span>(yield_winter<span class="sc">*</span>N_perc, <span class="st">"mgN m-3 d-1"</span>)</span>
+<span id="cb19-24"><a href="#cb19-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-25"><a href="#cb19-25" aria-hidden="true" tabindex="-1"></a>max_growth <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="at">spring =</span> yield_spring<span class="sc">/</span>stock_dens, <span class="at">winter =</span> yield_winter<span class="sc">/</span>stock_dens)</span>
+<span id="cb19-26"><a href="#cb19-26" aria-hidden="true" tabindex="-1"></a>mu <span class="ot">&lt;-</span> <span class="fu">max</span>(max_growth)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <summary>Get <span class="citation" data-cites="schuenhoff_tetrasporophyte_2006">Schuenhoff, Mata, and Santos (<a href="#ref-schuenhoff_tetrasporophyte_2006" role="doc-biblioref">2006</a>)</span> starting condition and yield data</summary>
 <div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># schuenhoff_tetrasporophyte_2006 dry to wet conversion</span></span>
 <span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="fu">remove_unit</span>(<span class="st">"gWW"</span>)</span>
@@ -813,6 +1088,11 @@ Y(g DW m^{−2} week^{−1}) = \frac{N_t (g FW) − N_0 (g FW)}{t (weeks) \times
 <span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>  ) </span>
 <span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(Qlim)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="asparagopsis-parameterisation_files/figure-html/scale%20max%20growth-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -861,6 +1141,18 @@ Y(g DW m^{−2} week^{−1}) = \frac{N_t (g FW) − N_0 (g FW)}{t (weeks) \times
 </section>
 <section id="sec-temperature-tetrasporophyte" class="level1">
 <h1>Temperature response</h1>
+<p>By default, the gametophyte temperature parameters for <em>Asparagopsis</em> in the model will be identical to the tetrasporophyte. This is because much less research has been done on the gametophyte phases. However, the gametophyte and tetrasporophyte phase might have similar temperature optima. In <span class="citation" data-cites="chualain_invasive_2004">Chualáin et al. (<a href="#ref-chualain_invasive_2004" role="doc-biblioref">2004</a>)</span> <em>A.taxiformis</em> tetrasporophytes had an optimum growth temperature of 25<span class="math inline">\(^{\circ}\)</span>, and this same growth optimum was observed in <em>A.taxiformis</em> gametophytes by <span class="citation" data-cites="padilla-gamino_seasonal_2007">Padilla-Gamiño and Carpenter (<a href="#ref-padilla-gamino_seasonal_2007" role="doc-biblioref">2007</a>)</span>.</p>
+<p>However, <span class="citation" data-cites="mihaila_moderate_2024">Mihaila et al. (<a href="#ref-mihaila_moderate_2024" role="doc-biblioref">2024</a>)</span> tested the growth of juvenile (microscopic) gametophytes at 15, 18 and 21<span class="math inline">\(^{\circ}\)</span> and found that growth was highest at 18<span class="math inline">\(^{\circ}\)</span>, somewhat reduced at 15<span class="math inline">\(^{\circ}\)</span> and substantially reduced at 21<span class="math inline">\(^{\circ}\)</span>. This temperature optimum is lower than the NA<span class="math inline">\(^{\circ}\)</span> optimum found for the tetrasporophyte in <a href="#sec-temperature-tetrasporophyte" class="quarto-xref">Section&nbsp;6</a>, and the maximum is much lower. This might indicate that the gametophyte stage has a narrower temperature tolerance than the tetrasporophyte stage.</p>
+<div id="fig-seasonality" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-seasonality-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="images/seasonality.jpg" class="img-fluid figure-img" style="width:80.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-seasonality-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3: Timing of sea-cultured gametophytes and their appearance in the wild. Dark red indicates when the gametophyte is present on the reef, and lighter red indicates when gametophytes are just starting to appear or disappear, so less abundant. Tetrasporophytes have thus far been very difficult to find in the wild (Margie Rule, pers. comm.).
+</figcaption>
+</figure>
+</div>
 <p>By default, the gametophyte temperature parameters for <em>Asparagopsis</em> in the model will be identical to the tetrasporophyte. This is because much less research has been done on the gametophyte phases. However, the gametophyte and tetrasporophyte phase might have similar temperature optima. In <span class="citation" data-cites="chualain_invasive_2004">Chualáin et al. (<a href="#ref-chualain_invasive_2004" role="doc-biblioref">2004</a>)</span> <em>A.taxiformis</em> tetrasporophytes had an optimum growth temperature of 25<span class="math inline">\(^{\circ}\)</span>, and this same growth optimum was observed in <em>A.taxiformis</em> gametophytes by <span class="citation" data-cites="padilla-gamino_seasonal_2007">Padilla-Gamiño and Carpenter (<a href="#ref-padilla-gamino_seasonal_2007" role="doc-biblioref">2007</a>)</span>.</p>
 <p>However, <span class="citation" data-cites="mihaila_moderate_2024">Mihaila et al. (<a href="#ref-mihaila_moderate_2024" role="doc-biblioref">2024</a>)</span> tested the growth of juvenile (microscopic) gametophytes at 15, 18 and 21<span class="math inline">\(^{\circ}\)</span> and found that growth was highest at 18<span class="math inline">\(^{\circ}\)</span>, somewhat reduced at 15<span class="math inline">\(^{\circ}\)</span> and substantially reduced at 21<span class="math inline">\(^{\circ}\)</span>. This temperature optimum is lower than the NA<span class="math inline">\(^{\circ}\)</span> optimum found for the tetrasporophyte in <a href="#sec-temperature-tetrasporophyte" class="quarto-xref">Section&nbsp;6</a>, and the maximum is much lower. This might indicate that the gametophyte stage has a narrower temperature tolerance than the tetrasporophyte stage.</p>
 <div id="fig-seasonality" class="quarto-float quarto-figure quarto-figure-center anchored">
@@ -959,6 +1251,7 @@ Figure&nbsp;3: Timing of sea-cultured gametophytes and their appearance in the w
 <!-- K_d^{PAR} = ln(Ed_{z_2}/Ed_{z_1}) \times (z_1-z_2)-1 -->
 <!-- $$ -->
 <p>They expressed ETR in g DW but didn’t provide details of how g FW was converted to g DW. I’ll just use my previously calculated ratio of 7.11500003329053.</p>
+<p>They expressed ETR in g DW but didn’t provide details of how g FW was converted to g DW. I’ll just use my previously calculated ratio of 7.11500003329053.</p>
 <div class="cell">
 <details class="code-fold">
 <summary>Conditions in <span class="citation" data-cites="figueroa_use_2006">Figueroa et al. (<a href="#ref-figueroa_use_2006" role="doc-biblioref">2006</a>)</span></summary>
@@ -1000,6 +1293,7 @@ Figure&nbsp;3: Timing of sea-cultured gametophytes and their appearance in the w
 <span id="cb28-36"><a href="#cb28-36" aria-hidden="true" tabindex="-1"></a>all_acs <span class="ot">&lt;-</span> <span class="fu">drop_units</span>(all_acs)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
+<p>The above (from <span class="citation" data-cites="figueroa_use_2006">Figueroa et al. (<a href="#ref-figueroa_use_2006" role="doc-biblioref">2006</a>)</span>) actually gave a fairly narrow range of <span class="math inline">\(a_{cs}\)</span> values to use, from <span class="math inline">\(3.531 \times 10^{-8}\)</span> to <span class="math inline">\(1.462 \times 10^{-6}\)</span>. Taking an average of those values gives <span class="math inline">\(a_{cs}=\)</span><span class="math inline">\(6.171 \times 10^{-7}\&gt;\mathrm{m\&gt;mgN^{-1}}\)</span>.</p>
 <p>The above (from <span class="citation" data-cites="figueroa_use_2006">Figueroa et al. (<a href="#ref-figueroa_use_2006" role="doc-biblioref">2006</a>)</span>) actually gave a fairly narrow range of <span class="math inline">\(a_{cs}\)</span> values to use, from <span class="math inline">\(3.531 \times 10^{-8}\)</span> to <span class="math inline">\(1.462 \times 10^{-6}\)</span>. Taking an average of those values gives <span class="math inline">\(a_{cs}=\)</span><span class="math inline">\(6.171 \times 10^{-7}\&gt;\mathrm{m\&gt;mgN^{-1}}\)</span>.</p>
 <p>The optimum irradiance in <span class="citation" data-cites="zanolla_photosynthetic_2015">Zanolla et al. (<a href="#ref-zanolla_photosynthetic_2015" role="doc-biblioref">2015</a>)</span> was ~150 <span class="math inline">\(\mu\)</span>mol photons m<span class="math inline">\(^{-2}\)</span> s<span class="math inline">\(^{-1}\)</span> but this was only obvious in the 22<span class="math inline">\(^\circ\)</span> trials.</p>
 <div class="cell">
@@ -1061,6 +1355,7 @@ Figure&nbsp;3: Timing of sea-cultured gametophytes and their appearance in the w
 </div>
 </section>
 <section id="fragmentation-with-exposure" class="level1 page-columns page-full">
+<section id="fragmentation-with-exposure" class="level1 page-columns page-full">
 <h1>Fragmentation with exposure</h1>
 <p><span class="citation" data-cites="hall_investigating_2023">Hall (<a href="#ref-hall_investigating_2023" role="doc-biblioref">2023</a>)</span> counducted three (seemingly identical?) velocity treatments on gametophytes and measured % biomass lost. Experiments 1 and 2 showed no differences between treatments, but experiment 3 did. I’m going to use experiment 3’s results to get a linear rate with velocity, and set base and maximum rates based on observations from all three experiments.</p>
 <ul>
@@ -1099,6 +1394,8 @@ Important
 <div class="callout-body-container callout-body">
 <p>Is fragmentation maybe a function of age (maturity) or length of thalli, in addition to exposure?</p>
 </div>
+</div></div><section id="velocity" class="level2">
+<h2 class="anchored" data-anchor-id="velocity">Velocity</h2>
 </div></div><section id="velocity" class="level2">
 <h2 class="anchored" data-anchor-id="velocity">Velocity</h2>
 <p><span class="citation" data-cites="hall_investigating_2023">Hall (<a href="#ref-hall_investigating_2023" role="doc-biblioref">2023</a>)</span> investigated tetrasporophyte and gametophyte fragmentation at different levels of turbulence and water velocities. Focus of the study was on how fragmentation can be used in nurseries to enhance stock production. The laminar water velocities tested were:</p>
@@ -1192,6 +1489,8 @@ Important
 </section>
 <section id="turbulence" class="level2">
 <h2 class="anchored" data-anchor-id="turbulence">Turbulence</h2>
+<section id="turbulence" class="level2">
+<h2 class="anchored" data-anchor-id="turbulence">Turbulence</h2>
 <p><span class="citation" data-cites="hall_investigating_2023">Hall (<a href="#ref-hall_investigating_2023" role="doc-biblioref">2023</a>)</span> also investigated fragmentation due to turbulence on the gametophyte, which is summarised in Figures 3.28 and 3.29.</p>
 <div class="cell">
 <details class="code-fold">
@@ -1215,6 +1514,7 @@ Important
 </div>
 </div>
 <p>Looks very different between the two experiments, but I’m going to go with the one that shows a clear trend.</p>
+<p>Looks very different between the two experiments, but I’m going to go with the one that shows a clear trend.</p>
 <div class="cell">
 <details class="code-fold">
 <summary>Get turbulence data ready for vector</summary>
@@ -1227,7 +1527,17 @@ Important
 </section>
 </section>
 <section id="finishing-up" class="level1">
+<section id="finishing-up" class="level1">
 <h1>Finishing up</h1>
+<section id="sec-final-params" class="level2">
+<h2 class="anchored" data-anchor-id="sec-final-params">All parameters and sources</h2>
+<p><a href="#tbl-params" class="quarto-xref">Table&nbsp;2</a> shows exactly what’s going into the species vectors. Note that only one of <span class="math inline">\(V_{am}\)</span> &amp; <span class="math inline">\(K_{am}\)</span> or <span class="math inline">\(M_{am}\)</span> &amp; <span class="math inline">\(C_{am}\)</span> will be used as the macroalgae will not have both linear and Michaelis-Menton uptake of the same nutrient.</p>
+<div id="tbl-params" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-params-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;2: Final values for species parameters before saving. These are displayed both for transparency and to check that the units have converted correctly.
+</figcaption>
+<div aria-describedby="tbl-params-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <section id="sec-final-params" class="level2">
 <h2 class="anchored" data-anchor-id="sec-final-params">All parameters and sources</h2>
 <p><a href="#tbl-params" class="quarto-xref">Table&nbsp;2</a> shows exactly what’s going into the species vectors. Note that only one of <span class="math inline">\(V_{am}\)</span> &amp; <span class="math inline">\(K_{am}\)</span> or <span class="math inline">\(M_{am}\)</span> &amp; <span class="math inline">\(C_{am}\)</span> will be used as the macroalgae will not have both linear and Michaelis-Menton uptake of the same nutrient.</p>
@@ -1244,10 +1554,19 @@ Table&nbsp;2: Final values for species parameters before saving. These are displ
 <col style="width: 19%">
 <col style="width: 19%">
 <col style="width: 39%">
+<col style="width: 13%">
+<col style="width: 8%">
+<col style="width: 19%">
+<col style="width: 19%">
+<col style="width: 39%">
 </colgroup>
 <thead>
 <tr class="header">
 <th>Parameter</th>
+<th style="text-align: center;">Units</th>
+<th style="text-align: center;"><em>A. armata</em> value</th>
+<th style="text-align: center;"><em>A. taxiformis</em> value</th>
+<th style="text-align: left;">Sources</th>
 <th style="text-align: center;">Units</th>
 <th style="text-align: center;"><em>A. armata</em> value</th>
 <th style="text-align: center;"><em>A. taxiformis</em> value</th>
@@ -1261,8 +1580,18 @@ Table&nbsp;2: Final values for species parameters before saving. These are displ
 <td style="text-align: center;"><span class="math inline">\(14.85\)</span></td>
 <td style="text-align: center;"></td>
 <td style="text-align: left;"><span class="citation" data-cites="schuenhoff_tetrasporophyte_2006">Schuenhoff, Mata, and Santos (<a href="#ref-schuenhoff_tetrasporophyte_2006" role="doc-biblioref">2006</a>)</span></td>
+<td><span class="math inline">\(V_{am}\)</span></td>
+<td style="text-align: center;">umolN/gDW/h</td>
+<td style="text-align: center;"><span class="math inline">\(14.85\)</span></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;"><span class="citation" data-cites="schuenhoff_tetrasporophyte_2006">Schuenhoff, Mata, and Santos (<a href="#ref-schuenhoff_tetrasporophyte_2006" role="doc-biblioref">2006</a>)</span></td>
 </tr>
 <tr class="even">
+<td><span class="math inline">\(K_{am}\)</span></td>
+<td style="text-align: center;">umolN/L</td>
+<td style="text-align: center;"><span class="math inline">\(10.01\)</span></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;"><span class="citation" data-cites="schuenhoff_tetrasporophyte_2006">Schuenhoff, Mata, and Santos (<a href="#ref-schuenhoff_tetrasporophyte_2006" role="doc-biblioref">2006</a>)</span></td>
 <td><span class="math inline">\(K_{am}\)</span></td>
 <td style="text-align: center;">umolN/L</td>
 <td style="text-align: center;"><span class="math inline">\(10.01\)</span></td>
@@ -1343,10 +1672,86 @@ Table&nbsp;2: Final values for species parameters before saving. These are displ
 <td><span class="math inline">\(\mu\)</span></td>
 <td style="text-align: center;">1/d</td>
 <td style="text-align: center;"><span class="math inline">\(0.1667\)</span></td>
+<td><span class="math inline">\(M_{am}\)</span></td>
+<td style="text-align: center;">L/gDW/h</td>
+<td style="text-align: center;"><span class="math inline">\(0.1400\)</span></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;"><span class="citation" data-cites="torres_nitrogen_2021">Torres et al. (<a href="#ref-torres_nitrogen_2021" role="doc-biblioref">2021</a>)</span></td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(C_{am}\)</span></td>
+<td style="text-align: center;">umolN/gDW/h</td>
+<td style="text-align: center;"><span class="math inline">\(8.790\)</span></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;"><span class="citation" data-cites="torres_nitrogen_2021">Torres et al. (<a href="#ref-torres_nitrogen_2021" role="doc-biblioref">2021</a>)</span></td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(M_{ni}\)</span></td>
+<td style="text-align: center;">L/gDW/h</td>
+<td style="text-align: center;"><span class="math inline">\(-1.382 \times 10^{-3}\)</span></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;"><span class="citation" data-cites="torres_nitrogen_2021">Torres et al. (<a href="#ref-torres_nitrogen_2021" role="doc-biblioref">2021</a>)</span></td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(C_{ni}\)</span></td>
+<td style="text-align: center;">umolN/gDW/h</td>
+<td style="text-align: center;"><span class="math inline">\(0.4430\)</span></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;"><span class="citation" data-cites="torres_nitrogen_2021">Torres et al. (<a href="#ref-torres_nitrogen_2021" role="doc-biblioref">2021</a>)</span></td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(M_{ot}\)</span></td>
+<td style="text-align: center;">L/gDW/h</td>
+<td style="text-align: center;"><span class="math inline">\(6.000 \times 10^{-3}\)</span></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;"><span class="citation" data-cites="torres_nitrogen_2021">Torres et al. (<a href="#ref-torres_nitrogen_2021" role="doc-biblioref">2021</a>)</span></td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(C_{ot}\)</span></td>
+<td style="text-align: center;">umolN/gDW/h</td>
+<td style="text-align: center;"><span class="math inline">\(0.8800\)</span></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;"><span class="citation" data-cites="torres_nitrogen_2021">Torres et al. (<a href="#ref-torres_nitrogen_2021" role="doc-biblioref">2021</a>)</span></td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(K_{c}\)</span></td>
+<td style="text-align: center;">-</td>
+<td style="text-align: center;"><span class="math inline">\(\mathrm{NA}\)</span></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;"><span class="citation" data-cites="hadley_modeling_2015">Hadley et al. (<a href="#ref-hadley_modeling_2015" role="doc-biblioref">2015</a>)</span></td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(Q_{min}\)</span></td>
+<td style="text-align: center;">mgN/gDW</td>
+<td style="text-align: center;"><span class="math inline">\(19.43\)</span></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;"><span class="citation" data-cites="mihaila_new_2022">Mihaila et al. (<a href="#ref-mihaila_new_2022" role="doc-biblioref">2022</a>)</span>; <span class="citation" data-cites="zemke-white_chlorophyte_1999">Zemke-White and Clements (<a href="#ref-zemke-white_chlorophyte_1999" role="doc-biblioref">1999</a>)</span>; <span class="citation" data-cites="angell_protein_2016">Angell et al. (<a href="#ref-angell_protein_2016" role="doc-biblioref">2016</a>)</span></td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(Q_{max}\)</span></td>
+<td style="text-align: center;">mgN/gDW</td>
+<td style="text-align: center;"><span class="math inline">\(65.00\)</span></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;"><span class="citation" data-cites="schuenhoff_tetrasporophyte_2006">Schuenhoff, Mata, and Santos (<a href="#ref-schuenhoff_tetrasporophyte_2006" role="doc-biblioref">2006</a>)</span></td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(DWWW\)</span></td>
+<td style="text-align: center;">gWW</td>
+<td style="text-align: center;"><span class="math inline">\(7.115\)</span></td>
+<td style="text-align: center;"></td>
+<td style="text-align: left;"><span class="citation" data-cites="nunes_evaluation_2024">Nunes et al. (<a href="#ref-nunes_evaluation_2024" role="doc-biblioref">2024</a>)</span>; <span class="citation" data-cites="roque_effect_2019">Roque et al. (<a href="#ref-roque_effect_2019" role="doc-biblioref">2019</a>)</span></td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(\mu\)</span></td>
+<td style="text-align: center;">1/d</td>
+<td style="text-align: center;"><span class="math inline">\(0.1667\)</span></td>
 <td style="text-align: center;"></td>
 <td style="text-align: left;"></td>
 </tr>
 <tr class="even">
+<td><span class="math inline">\(D_{m}\)</span></td>
+<td style="text-align: center;">1/d</td>
+<td style="text-align: center;"><span class="math inline">\(3.133 \times 10^{-2}\)</span></td>
 <td><span class="math inline">\(D_{m}\)</span></td>
 <td style="text-align: center;">1/d</td>
 <td style="text-align: center;"><span class="math inline">\(3.133 \times 10^{-2}\)</span></td>
@@ -1357,10 +1762,16 @@ Table&nbsp;2: Final values for species parameters before saving. These are displ
 <td><span class="math inline">\(D_{v}\)</span></td>
 <td style="text-align: center;">1/d</td>
 <td style="text-align: center;"><span class="math inline">\(1.233 \times 10^{-2}\)</span></td>
+<td><span class="math inline">\(D_{v}\)</span></td>
+<td style="text-align: center;">1/d</td>
+<td style="text-align: center;"><span class="math inline">\(1.233 \times 10^{-2}\)</span></td>
 <td style="text-align: center;"></td>
 <td style="text-align: left;"></td>
 </tr>
 <tr class="even">
+<td><span class="math inline">\(D_{lo}\)</span></td>
+<td style="text-align: center;">1/d</td>
+<td style="text-align: center;"><span class="math inline">\(5.390 \times 10^{-2}\)</span></td>
 <td><span class="math inline">\(D_{lo}\)</span></td>
 <td style="text-align: center;">1/d</td>
 <td style="text-align: center;"><span class="math inline">\(5.390 \times 10^{-2}\)</span></td>
@@ -1371,10 +1782,16 @@ Table&nbsp;2: Final values for species parameters before saving. These are displ
 <td><span class="math inline">\(D_{mi}\)</span></td>
 <td style="text-align: center;">1/d</td>
 <td style="text-align: center;"><span class="math inline">\(0.1270\)</span></td>
+<td><span class="math inline">\(D_{mi}\)</span></td>
+<td style="text-align: center;">1/d</td>
+<td style="text-align: center;"><span class="math inline">\(0.1270\)</span></td>
 <td style="text-align: center;"></td>
 <td style="text-align: left;"></td>
 </tr>
 <tr class="even">
+<td><span class="math inline">\(D_{hi}\)</span></td>
+<td style="text-align: center;">1/d</td>
+<td style="text-align: center;"><span class="math inline">\(0.2568\)</span></td>
 <td><span class="math inline">\(D_{hi}\)</span></td>
 <td style="text-align: center;">1/d</td>
 <td style="text-align: center;"><span class="math inline">\(0.2568\)</span></td>
@@ -1385,6 +1802,9 @@ Table&nbsp;2: Final values for species parameters before saving. These are displ
 <td><span class="math inline">\(I_o\)</span></td>
 <td style="text-align: center;">mol/m^2/s</td>
 <td style="text-align: center;"><span class="math inline">\(150.0\)</span></td>
+<td><span class="math inline">\(I_o\)</span></td>
+<td style="text-align: center;">mol/m^2/s</td>
+<td style="text-align: center;"><span class="math inline">\(150.0\)</span></td>
 <td style="text-align: center;"></td>
 <td style="text-align: left;"></td>
 </tr>
@@ -1392,10 +1812,17 @@ Table&nbsp;2: Final values for species parameters before saving. These are displ
 <td><span class="math inline">\(a_{cs}\)</span></td>
 <td style="text-align: center;">m/mgN</td>
 <td style="text-align: center;"><span class="math inline">\(6.171 \times 10^{-7}\)</span></td>
+<td><span class="math inline">\(a_{cs}\)</span></td>
+<td style="text-align: center;">m/mgN</td>
+<td style="text-align: center;"><span class="math inline">\(6.171 \times 10^{-7}\)</span></td>
 <td style="text-align: center;"></td>
 <td style="text-align: left;"></td>
 </tr>
 <tr class="odd">
+<td><span class="math inline">\(T_{opt}\)</span></td>
+<td style="text-align: center;">°C</td>
+<td style="text-align: center;"><span class="math inline">\(19.09\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(24.62\)</span></td>
 <td><span class="math inline">\(T_{opt}\)</span></td>
 <td style="text-align: center;">°C</td>
 <td style="text-align: center;"><span class="math inline">\(19.09\)</span></td>
@@ -1420,10 +1847,30 @@ Table&nbsp;2: Final values for species parameters before saving. These are displ
 <td><span class="math inline">\(S_{opt}\)</span></td>
 <td style="text-align: center;">g/L</td>
 <td style="text-align: center;"><span class="math inline">\(35.25\)</span></td>
+<td><span class="math inline">\(T_{min}\)</span></td>
+<td style="text-align: center;">°C</td>
+<td style="text-align: center;"><span class="math inline">\(8.895\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(16.03\)</span></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(T_{max}\)</span></td>
+<td style="text-align: center;">°C</td>
+<td style="text-align: center;"><span class="math inline">\(22.43\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(29.23\)</span></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(S_{opt}\)</span></td>
+<td style="text-align: center;">g/L</td>
+<td style="text-align: center;"><span class="math inline">\(35.25\)</span></td>
 <td style="text-align: center;"></td>
 <td style="text-align: left;"></td>
 </tr>
 <tr class="odd">
+<td><span class="math inline">\(S_{min}\)</span></td>
+<td style="text-align: center;">g/L</td>
+<td style="text-align: center;"><span class="math inline">\(21.15\)</span></td>
 <td><span class="math inline">\(S_{min}\)</span></td>
 <td style="text-align: center;">g/L</td>
 <td style="text-align: center;"><span class="math inline">\(21.15\)</span></td>
@@ -1434,10 +1881,16 @@ Table&nbsp;2: Final values for species parameters before saving. These are displ
 <td><span class="math inline">\(S_{max}\)</span></td>
 <td style="text-align: center;">g/L</td>
 <td style="text-align: center;"><span class="math inline">\(41.65\)</span></td>
+<td><span class="math inline">\(S_{max}\)</span></td>
+<td style="text-align: center;">g/L</td>
+<td style="text-align: center;"><span class="math inline">\(41.65\)</span></td>
 <td style="text-align: center;"></td>
 <td style="text-align: left;"></td>
 </tr>
 <tr class="odd">
+<td><span class="math inline">\(h_a\)</span></td>
+<td style="text-align: center;">-</td>
+<td style="text-align: center;"><span class="math inline">\(1.794 \times 10^{3}\)</span></td>
 <td><span class="math inline">\(h_a\)</span></td>
 <td style="text-align: center;">-</td>
 <td style="text-align: center;"><span class="math inline">\(1.794 \times 10^{3}\)</span></td>
@@ -1448,6 +1901,9 @@ Table&nbsp;2: Final values for species parameters before saving. These are displ
 <td><span class="math inline">\(h_b\)</span></td>
 <td style="text-align: center;">-</td>
 <td style="text-align: center;"><span class="math inline">\(1.500\)</span></td>
+<td><span class="math inline">\(h_b\)</span></td>
+<td style="text-align: center;">-</td>
+<td style="text-align: center;"><span class="math inline">\(1.500\)</span></td>
 <td style="text-align: center;"></td>
 <td style="text-align: left;"></td>
 </tr>
@@ -1455,10 +1911,16 @@ Table&nbsp;2: Final values for species parameters before saving. These are displ
 <td><span class="math inline">\(h_c\)</span></td>
 <td style="text-align: center;">-</td>
 <td style="text-align: center;"><span class="math inline">\(1.000 \times 10^{-2}\)</span></td>
+<td><span class="math inline">\(h_c\)</span></td>
+<td style="text-align: center;">-</td>
+<td style="text-align: center;"><span class="math inline">\(1.000 \times 10^{-2}\)</span></td>
 <td style="text-align: center;"></td>
 <td style="text-align: left;"></td>
 </tr>
 <tr class="even">
+<td><span class="math inline">\(h_{max}\)</span></td>
+<td style="text-align: center;">m</td>
+<td style="text-align: center;"><span class="math inline">\(0.2600\)</span></td>
 <td><span class="math inline">\(h_{max}\)</span></td>
 <td style="text-align: center;">m</td>
 <td style="text-align: center;"><span class="math inline">\(0.2600\)</span></td>
@@ -1470,7 +1932,12 @@ Table&nbsp;2: Final values for species parameters before saving. These are displ
 </div>
 </figure>
 </div>
+</div>
+</figure>
+</div>
 </section>
+<section id="sec-save" class="level2">
+<h2 class="anchored" data-anchor-id="sec-save">Saving data</h2>
 <section id="sec-save" class="level2">
 <h2 class="anchored" data-anchor-id="sec-save">Saving data</h2>
 <div class="cell">
@@ -1545,6 +2012,7 @@ Table&nbsp;2: Final values for species parameters before saving. These are displ
 </details>
 </div>
 <p>The model uses a named vector, which can be loaded straight from Rdata files, but I’m saving as a .csv file because that’s easier for human reading.</p>
+<p>The model uses a named vector, which can be loaded straight from Rdata files, but I’m saving as a .csv file because that’s easier for human reading.</p>
 <div class="cell">
 <details class="code-fold">
 <summary>Save named vector and .csv file</summary>
@@ -1581,7 +2049,13 @@ Table&nbsp;2: Final values for species parameters before saving. These are displ
 <p>It has been suggested that the model should include the possibility of phosphorus limitation, as well as nitrogen limitation (switching between the limiting nutrient based on availability/internal conditions). This was considered because the places where macroalgae is being grown for nitrogen bioremediation purposes (river outflows, next to fish farms) are likely to be very high in nitrogen but not necessarily phosphates.</p>
 <p>However, it was decided not to include phosphorus limitation. While the mechanics of including it would be fairly simple, research into the required parameters (shape and rate of uptake, internal requirements) are almost non-existent for <em>Asparagopsis</em>. <span class="citation" data-cites="grisenthwaite_establishing_2023">Grisenthwaite (<a href="#ref-grisenthwaite_establishing_2023" role="doc-biblioref">2023</a>)</span> may possibly have some of this data for tetrasporophytes(?) but I have yet to find anything similar for gametophytes. If the ‘standard’, not species-specific Atkinson ratio of N:P were assumed <span class="citation" data-cites="atkinson_cnp_1983">(<a href="#ref-atkinson_cnp_1983" role="doc-biblioref">Atkinson and Smith 1983</a>)</span>, then the algae would require 1/30<sup>th</sup> as much phosphorus as nitrogen to maintain the modelled growth. Given that macroalgae require so much more nitrogen than phosphorus, it seems unlikely that they are ever going to be phosphorus limited in coastal or oceanic waters. Phosphates are also not often measured in marine waters, so obtaining ambient data would be extremely difficult.</p>
 <p>Still, if the Atkinson ratio (30:1 N:P) were assumed and phosphate uptake kinetics were ignored, then the minimum phosphate concentrations required to maintain the modelled growth can be estimated and reported as an additional consideration.</p>
+<section id="limitation-by-other-nutrients" class="level2">
+<h2 class="anchored" data-anchor-id="limitation-by-other-nutrients">Limitation by other nutrients</h2>
+<p>It has been suggested that the model should include the possibility of phosphorus limitation, as well as nitrogen limitation (switching between the limiting nutrient based on availability/internal conditions). This was considered because the places where macroalgae is being grown for nitrogen bioremediation purposes (river outflows, next to fish farms) are likely to be very high in nitrogen but not necessarily phosphates.</p>
+<p>However, it was decided not to include phosphorus limitation. While the mechanics of including it would be fairly simple, research into the required parameters (shape and rate of uptake, internal requirements) are almost non-existent for <em>Asparagopsis</em>. <span class="citation" data-cites="grisenthwaite_establishing_2023">Grisenthwaite (<a href="#ref-grisenthwaite_establishing_2023" role="doc-biblioref">2023</a>)</span> may possibly have some of this data for tetrasporophytes(?) but I have yet to find anything similar for gametophytes. If the ‘standard’, not species-specific Atkinson ratio of N:P were assumed <span class="citation" data-cites="atkinson_cnp_1983">(<a href="#ref-atkinson_cnp_1983" role="doc-biblioref">Atkinson and Smith 1983</a>)</span>, then the algae would require 1/30<sup>th</sup> as much phosphorus as nitrogen to maintain the modelled growth. Given that macroalgae require so much more nitrogen than phosphorus, it seems unlikely that they are ever going to be phosphorus limited in coastal or oceanic waters. Phosphates are also not often measured in marine waters, so obtaining ambient data would be extremely difficult.</p>
+<p>Still, if the Atkinson ratio (30:1 N:P) were assumed and phosphate uptake kinetics were ignored, then the minimum phosphate concentrations required to maintain the modelled growth can be estimated and reported as an additional consideration.</p>
 <ul>
+<li>Dissolved inorganic carbon may be a major (perhaps determining?) limiting factor for growth and photosynthesis in <em>Asparagopsis</em> <span class="citation" data-cites="zanolla_concise_2022 mata_direct_2010">(<a href="#ref-zanolla_concise_2022" role="doc-biblioref">Zanolla et al. 2022</a>; <a href="#ref-mata_direct_2010" role="doc-biblioref">Mata, Schuenhoff, and Santos 2010</a>)</span>
 <li>Dissolved inorganic carbon may be a major (perhaps determining?) limiting factor for growth and photosynthesis in <em>Asparagopsis</em> <span class="citation" data-cites="zanolla_concise_2022 mata_direct_2010">(<a href="#ref-zanolla_concise_2022" role="doc-biblioref">Zanolla et al. 2022</a>; <a href="#ref-mata_direct_2010" role="doc-biblioref">Mata, Schuenhoff, and Santos 2010</a>)</span>
 <ul>
 <li><span class="citation" data-cites="sainz-villegas_modelling_2024">Sainz-Villegas (<a href="#ref-sainz-villegas_modelling_2024" role="doc-biblioref">2024</a>)</span> and <span class="citation" data-cites="sainz-villegas_exploring_2024">Sainz-Villegas et al. (<a href="#ref-sainz-villegas_exploring_2024" role="doc-biblioref">2024</a>)</span> investigated the survival of vegetative propagules (juvenile gametophytes) - potential to estimate propagation/spread based on wave exposure</li>
@@ -1590,8 +2064,10 @@ Table&nbsp;2: Final values for species parameters before saving. These are displ
 </ul>
 </section>
 </section>
+</section>
 <section id="code" class="level1">
 <h1>Code</h1>
+<p>This document was written in Quarto <span class="citation" data-cites="quarto">(<a href="#ref-quarto" role="doc-biblioref">Allaire et al. 2024</a>)</span>. All code used R version 4.4.2 “Pile of Leaves” <span class="citation" data-cites="R_base">(<a href="#ref-R_base" role="doc-biblioref">R Core Team 2019</a>)</span>, and major packages used include packages <code>conflicted</code>, version 1.2.0 <span class="citation" data-cites="conflicted">(<a href="#ref-conflicted" role="doc-biblioref">Wickham 2023a</a>)</span>, <code>cowplot</code>, version 1.2.0 <span class="citation" data-cites="cowplot">(<a href="#ref-cowplot" role="doc-biblioref">Wilke 2024</a>)</span>, <code>dplyr</code>, version 1.1.4 <span class="citation" data-cites="dplyr">(<a href="#ref-dplyr" role="doc-biblioref">Wickham et al. 2023</a>)</span>, <code>formatdown</code>, version 0.1.4 <span class="citation" data-cites="formatdown">(<a href="#ref-formatdown" role="doc-biblioref">Layton 2024</a>)</span>, <code>ggplot2</code>, version 3.5.2 <span class="citation" data-cites="ggplot2">(<a href="#ref-ggplot2" role="doc-biblioref">Wickham 2016</a>)</span>, <code>here</code>, version 1.0.1 <span class="citation" data-cites="here">(<a href="#ref-here" role="doc-biblioref"><strong>here?</strong></a>)</span>, <code>knitr</code>, version 1.50 <span class="citation" data-cites="knitr">(<a href="#ref-knitr" role="doc-biblioref"><strong>knitr?</strong></a>)</span>, <code>macrogrow</code>, version 1.0 <span class="citation" data-cites="macrogrow">(<a href="#ref-macrogrow" role="doc-biblioref"><strong>macrogrow?</strong></a>)</span>, <code>magrittr</code>, version 2.0.3 <span class="citation" data-cites="magrittr">(<a href="#ref-magrittr" role="doc-biblioref">Bache and Wickham 2022</a>)</span>, <code>qs</code>, version 0.27.3 <span class="citation" data-cites="qs">(<a href="#ref-qs" role="doc-biblioref"><strong>qs?</strong></a>)</span>, <code>stringr</code>, version 1.5.1 <span class="citation" data-cites="stringr">(<a href="#ref-stringr" role="doc-biblioref">Wickham 2023b</a>)</span>, <code>tidyr</code>, version 1.3.1 <span class="citation" data-cites="tidyr">(<a href="#ref-tidyr" role="doc-biblioref">Wickham, Vaughan, and Girlich 2024</a>)</span>, and <code>units</code>, version 0.8.7 <span class="citation" data-cites="units">(<a href="#ref-units" role="doc-biblioref">Pebesma, Mailund, and Hiebert 2016</a>)</span>. For a full list of R packages used see the lockfile on <a href="https://www.github.com">Github</a>.</p>
 <p>This document was written in Quarto <span class="citation" data-cites="quarto">(<a href="#ref-quarto" role="doc-biblioref">Allaire et al. 2024</a>)</span>. All code used R version 4.4.2 “Pile of Leaves” <span class="citation" data-cites="R_base">(<a href="#ref-R_base" role="doc-biblioref">R Core Team 2019</a>)</span>, and major packages used include packages <code>conflicted</code>, version 1.2.0 <span class="citation" data-cites="conflicted">(<a href="#ref-conflicted" role="doc-biblioref">Wickham 2023a</a>)</span>, <code>cowplot</code>, version 1.2.0 <span class="citation" data-cites="cowplot">(<a href="#ref-cowplot" role="doc-biblioref">Wilke 2024</a>)</span>, <code>dplyr</code>, version 1.1.4 <span class="citation" data-cites="dplyr">(<a href="#ref-dplyr" role="doc-biblioref">Wickham et al. 2023</a>)</span>, <code>formatdown</code>, version 0.1.4 <span class="citation" data-cites="formatdown">(<a href="#ref-formatdown" role="doc-biblioref">Layton 2024</a>)</span>, <code>ggplot2</code>, version 3.5.2 <span class="citation" data-cites="ggplot2">(<a href="#ref-ggplot2" role="doc-biblioref">Wickham 2016</a>)</span>, <code>here</code>, version 1.0.1 <span class="citation" data-cites="here">(<a href="#ref-here" role="doc-biblioref"><strong>here?</strong></a>)</span>, <code>knitr</code>, version 1.50 <span class="citation" data-cites="knitr">(<a href="#ref-knitr" role="doc-biblioref"><strong>knitr?</strong></a>)</span>, <code>macrogrow</code>, version 1.0 <span class="citation" data-cites="macrogrow">(<a href="#ref-macrogrow" role="doc-biblioref"><strong>macrogrow?</strong></a>)</span>, <code>magrittr</code>, version 2.0.3 <span class="citation" data-cites="magrittr">(<a href="#ref-magrittr" role="doc-biblioref">Bache and Wickham 2022</a>)</span>, <code>qs</code>, version 0.27.3 <span class="citation" data-cites="qs">(<a href="#ref-qs" role="doc-biblioref"><strong>qs?</strong></a>)</span>, <code>stringr</code>, version 1.5.1 <span class="citation" data-cites="stringr">(<a href="#ref-stringr" role="doc-biblioref">Wickham 2023b</a>)</span>, <code>tidyr</code>, version 1.3.1 <span class="citation" data-cites="tidyr">(<a href="#ref-tidyr" role="doc-biblioref">Wickham, Vaughan, and Girlich 2024</a>)</span>, and <code>units</code>, version 0.8.7 <span class="citation" data-cites="units">(<a href="#ref-units" role="doc-biblioref">Pebesma, Mailund, and Hiebert 2016</a>)</span>. For a full list of R packages used see the lockfile on <a href="https://www.github.com">Github</a>.</p>
 </section>
 <section id="references" class="level1 unnumbered">
@@ -1637,6 +2113,7 @@ Grisenthwaite, Robert David Karr. 2023. <span>‘Establishing Land Tank Cultivat
 Hadley, Scott A., Karen A. Wild-Allen, Craig R. Johnson, and Catriona K. MacLeod. 2015. <span>‘Modeling Macroalgae Growth and Nutrient Dynamics for Integrated Multi-Trophic Aquaculture’</span>. <em>Journal of Applied Phycology</em> 27 (2): 901–16. <a href="http://doi.org/10.1007/s10811-014-0370-y">http://doi.org/10.1007/s10811-014-0370-y</a>.
 </div>
 <div id="ref-hall_investigating_2023" class="csl-entry" role="listitem">
+Hall, Ailise Maree. 2023. <span>‘Investigating the Effects of Water Motion on Fragmentation of the Red Seaweed <em><span>Asparagopsis</span> Armata</em>’</span>. Master of {Science}, Auckland, NZ: University of Auckland. <a href="https://doi.org/2292/67001">https://doi.org/2292/67001</a>.
 Hall, Ailise Maree. 2023. <span>‘Investigating the Effects of Water Motion on Fragmentation of the Red Seaweed <em><span>Asparagopsis</span> Armata</em>’</span>. Master of {Science}, Auckland, NZ: University of Auckland. <a href="https://doi.org/2292/67001">https://doi.org/2292/67001</a>.
 </div>
 <div id="ref-kraan_commercial_2005" class="csl-entry" role="listitem">
@@ -1689,6 +2166,7 @@ Roque, Breanna Michell, Charles Garrett Brooke, Joshua Ladau, Tamsen Polley, Lyn
 </div>
 <div id="ref-sainz-villegas_modelling_2024" class="csl-entry" role="listitem">
 Sainz-Villegas, Samuel. 2024. <span>‘Modelling the <span>Effects</span> of <span>Climate</span> <span>Change</span> on the <span>Distribution</span> of <span>Subtidal</span> <span>Macroalgae</span>: <span>The</span> <span>Role</span> of <span>Vegetative</span> <span>Propagation</span>’</span>. Doctor of {Philosophy}, Santander, Spain: Universidad de Cantabria. <a href="https://doi.org/10.1201/9781003126096-15">https://doi.org/10.1201/9781003126096-15</a>.
+Sainz-Villegas, Samuel. 2024. <span>‘Modelling the <span>Effects</span> of <span>Climate</span> <span>Change</span> on the <span>Distribution</span> of <span>Subtidal</span> <span>Macroalgae</span>: <span>The</span> <span>Role</span> of <span>Vegetative</span> <span>Propagation</span>’</span>. Doctor of {Philosophy}, Santander, Spain: Universidad de Cantabria. <a href="https://doi.org/10.1201/9781003126096-15">https://doi.org/10.1201/9781003126096-15</a>.
 </div>
 <div id="ref-sainz-villegas_exploring_2024" class="csl-entry" role="listitem">
 Sainz-Villegas, Samuel, Begoña Sánchez-Astráin, Araceli Puente, and José A. Juanes. 2024. <span>‘Exploring the Effects of Temperature and Light Availability on the Vegetative Propagation Processes of the Non-Native Species <em><span>Asparagopsis</span> Armata</em>’</span>. <em>Frontiers in Marine Science</em> 10: 1343353. <a href="https://doi.org/10.3389/fmars.2023.1343353">https://doi.org/10.3389/fmars.2023.1343353</a>.
@@ -1710,6 +2188,7 @@ Wickham, Hadley. 2016. <em>Ggplot2: Elegant Graphics for Data Analysis</em>. Spr
 </div>
 <div id="ref-stringr" class="csl-entry" role="listitem">
 ———. 2023b. <em>Stringr: Simple, Consistent Wrappers for Common String Operations</em>. <a href="https://CRAN.R-project.org/package=stringr">https://CRAN.R-project.org/package=stringr</a>.
+———. 2023b. <em>Stringr: Simple, Consistent Wrappers for Common String Operations</em>. <a href="https://CRAN.R-project.org/package=stringr">https://CRAN.R-project.org/package=stringr</a>.
 </div>
 <div id="ref-dplyr" class="csl-entry" role="listitem">
 Wickham, Hadley, Romain François, Lionel Henry, Kirill Müller, and Davis Vaughan. 2023. <em>Dplyr: A Grammar of Data Manipulation</em>. <a href="https://CRAN.R-project.org/package=dplyr">https://CRAN.R-project.org/package=dplyr</a>.
@@ -1729,6 +2208,9 @@ Wright, Jeffrey T., Elysha J. Kennedy, Rocky de Nys, and Masayuki Tatsumi. 2022.
 <div id="ref-zanolla_photosynthetic_2015" class="csl-entry" role="listitem">
 Zanolla, Marianela, Maria Altamirano, Raquwl Carmona, Julio De La Rosa, Alison Sherwood, and Nikos Andreakis. 2015. <span>‘Photosynthetic Plasticity of the Genus <em>Asparagopsis</em> (<span>Bonnemaisoniales</span>, <span>Rhodophyta</span>) in Response to Temperature: Implications for Invasiveness’</span>. <em>Biological Invasions</em> 17 (5): 1341–53. <a href="http://doi.org/10.1007/s10530-014-0797-8">http://doi.org/10.1007/s10530-014-0797-8</a>.
 </div>
+<div id="ref-zanolla_photosynthetic_2015" class="csl-entry" role="listitem">
+Zanolla, Marianela, Maria Altamirano, Raquwl Carmona, Julio De La Rosa, Alison Sherwood, and Nikos Andreakis. 2015. <span>‘Photosynthetic Plasticity of the Genus <em>Asparagopsis</em> (<span>Bonnemaisoniales</span>, <span>Rhodophyta</span>) in Response to Temperature: Implications for Invasiveness’</span>. <em>Biological Invasions</em> 17 (5): 1341–53. <a href="http://doi.org/10.1007/s10530-014-0797-8">http://doi.org/10.1007/s10530-014-0797-8</a>.
+</div>
 <div id="ref-zanolla_assessing_2018" class="csl-entry" role="listitem">
 Zanolla, Marianela, María Altamirano, Raquel Carmona, Julio De La Rosa, Virginia Souza‐Egipsy, Alison Sherwood, Konstantinos Tsiamis, Ana Márcia Barbosa, Antonio Román Muñoz, and Nikos Andreakis. 2018. <span>‘Assessing Global Range Expansion in a Cryptic Species Complex: Insights from the Red Seaweed Genus <em>Asparagopsis</em> (<span>Florideophyceae</span>)’</span>. Edited by K. Müller. <em>Journal of Phycology</em> 54 (1): 12–24. <a href="https://doi.org/10.1111/jpy.12598">https://doi.org/10.1111/jpy.12598</a>.
 </div>
@@ -1736,6 +2218,7 @@ Zanolla, Marianela, María Altamirano, Raquel Carmona, Julio De La Rosa, Virgini
 Zanolla, Marianela, María Altamirano, Julio De La Rosa, Francisco X. Niell, and Raquel Carmona. 2018. <span>‘Size Structure and Dynamics of an Invasive Population of Lineage 2 of <em><span>Asparagopsis</span> Taxiformis</em> (<span>Florideophyceae</span>) in the <span>Alboran</span> <span>Sea</span>’</span>. <em>Phycological Research</em> 66 (1): 45–51. <a href="https://doi.org/10.1111/pre.12189">https://doi.org/10.1111/pre.12189</a>.
 </div>
 <div id="ref-zanolla_there_2019" class="csl-entry" role="listitem">
+Zanolla, Marianela, Maria Altamirano, Francisco Xavier Niell, and Raquel Carmona. 2019. <span>‘There Is More Than Meets the Eye: <span>Primary</span> Production of the Invasive Seaweed <em><span>Asparagopsis</span> Taxiformis</em> (<span>Bonnemaisoniaceae</span>, <span>Rhodophyta</span>) Is Provided by Six Cohorts with Distinctive Characteristics’</span>. <em>Aquatic Botany</em> 153: 24–28. <a href="https://doi.org/10.1016/j.aquabot.2018.11.007">https://doi.org/10.1016/j.aquabot.2018.11.007</a>.
 Zanolla, Marianela, Maria Altamirano, Francisco Xavier Niell, and Raquel Carmona. 2019. <span>‘There Is More Than Meets the Eye: <span>Primary</span> Production of the Invasive Seaweed <em><span>Asparagopsis</span> Taxiformis</em> (<span>Bonnemaisoniaceae</span>, <span>Rhodophyta</span>) Is Provided by Six Cohorts with Distinctive Characteristics’</span>. <em>Aquatic Botany</em> 153: 24–28. <a href="https://doi.org/10.1016/j.aquabot.2018.11.007">https://doi.org/10.1016/j.aquabot.2018.11.007</a>.
 </div>
 <div id="ref-zanolla_structure_2018" class="csl-entry" role="listitem">
@@ -1745,6 +2228,7 @@ Zanolla, Marianela, Raquel Carmona, Julio De La Rosa, and María Altamirano. 201
 Zanolla, Marianela, Raquel Carmona, Leonardo Mata, Julio De La Rosa, Alison Sherwood, Carlos Navarro Barranco, Antonio Román Muñoz, and María Altamirano. 2022. <span>‘Concise Review of the Genus <em>Asparagopsis</em> <span>Montagne</span>, 1840’</span>. <em>Journal of Applied Phycology</em> 34 (1): 1–17. <a href="https://doi.org/10.1007/s10811-021-02665-z">https://doi.org/10.1007/s10811-021-02665-z</a>.
 </div>
 <div id="ref-zemke-white_chlorophyte_1999" class="csl-entry" role="listitem">
+Zemke-White, W. Lindsey, and Kendall D. Clements. 1999. <span>‘Chlorophyte and Rhodophyte Starches as Factors in Diet Choice by Marine Herbivorous Fish’</span>. <em>Journal of Experimental Marine Biology and Ecology</em> 240 (1): 137–49. <a href="https://doi.org/10.1016/S0022-0981(99)00056-8">https://doi.org/10.1016/S0022-0981(99)00056-8</a>.
 Zemke-White, W. Lindsey, and Kendall D. Clements. 1999. <span>‘Chlorophyte and Rhodophyte Starches as Factors in Diet Choice by Marine Herbivorous Fish’</span>. <em>Journal of Experimental Marine Biology and Ecology</em> 240 (1): 137–49. <a href="https://doi.org/10.1016/S0022-0981(99)00056-8">https://doi.org/10.1016/S0022-0981(99)00056-8</a>.
 </div>
 </div></section></div></main>

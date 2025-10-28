@@ -15,7 +15,13 @@ here() %>% file.path("R_scripts", "00_functions.R") %>% source()
 # It collates all the species parameters into named number vectors for easier model running, and also outputs them 
 # into human-readable .csv files in the "data" folder. 
   # terminal: quarto render parameterisation/asparagopsis-parameterisation.qmd
+# The species markdown details the parameterisation process for _Asparagopsis armata_ and _Asparagopsis taxiformis_. 
+# It collates all the species parameters into named number vectors for easier model running, and also outputs them 
+# into human-readable .csv files in the "data" folder. 
+  # terminal: quarto render parameterisation/asparagopsis-parameterisation.qmd
 
+# The project_species targets pipeline collates the relevant species data into iterable lists for easier model 
+# running later on, and also runs all the sensitivity analyses on species parameters. 
 # The project_species targets pipeline collates the relevant species data into iterable lists for easier model 
 # running later on, and also runs all the sensitivity analyses on species parameters. 
 Sys.setenv(TAR_PROJECT = "project_species")

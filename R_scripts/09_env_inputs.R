@@ -1,30 +1,28 @@
-suppressMessages(suppressWarnings({
-  library(targets)
-  library(tarchetypes)
-  library(crew)
-  library(mirai)
-  library(tidyr)
-  library(conflicted)
-  library(qs)
-  library(qs2)
-  library(magrittr)
-  library(stringr)
-  library(geotargets)
-  library(raster)
-  library(sp)
-}))
+library(targets)
+library(tarchetypes)
+library(crew)
+library(mirai)
+library(tidyr)
+library(conflicted)
+library(qs)
+library(qs2)
+library(magrittr)
+library(stringr)
+library(geotargets)
+library(raster)
+library(sp)
 conflicts_prefer(dplyr::filter(), dplyr::select(), .quiet = T)
 
 tar_option_set(
   packages = c("dplyr", "macrogrow", "geosphere", "stringr"),
   format = "qs",
-  controller = crew::crew_controller_local(workers = 16, seconds_idle = 120),
+  controller = crew::crew_controller_local(workers = 6, seconds_idle = 120),
   workspace_on_error = T,
   garbage_collection = 500
 )
 
 tar_source(
-  files = c(file.path("R_scripts", "00_targets_functions.R"))
+  files = c(file.path("R_scripts", "00_functions.R"))
 )
 
 # For outfall volume processing
@@ -71,7 +69,6 @@ list(
       AUS = c(lonmin = 110, lonmax = 157, latmin = -44.5, latmax = -7.5), # All Australia
       SAU = c(lonmin = 128.94, lonmax = 140.97, latmin = -39, latmax = -31), # All South Australia
       QLD = c(lonmin = 138.05, lonmax = 155, latmin = -28.20, latmax = -8), # All Queensland
-      # WAU = c(lonmin = 111, lonmax = 128.94, latmin = -36, latmax = -10), # All Western Australia (not in use!)
       WAS = c(lonmin = 111, lonmax = 128.94, latmin = -36, latmax = -24.35), # South Western Australia
       WAN = c(lonmin = 111, lonmax = 128.94, latmin = -24.35, latmax = -10), # North Western Australia
       TAS = c(lonmin = 143, lonmax = 149.4, latmin = -44.5, latmax = -39.4), # All Tasmania
@@ -128,7 +125,7 @@ list(
   tar_target(
     BARRA_C2_cell_nos, 
     BARRA_C2_cell_coords %>% 
-      # slice_sample(n = 2000) %>% 
+      # slice_sample(n = 1000) %>% 
       select(cell_no) %>% unlist() %>% unname()
   ),
   
@@ -348,9 +345,10 @@ list(
   
   # Cell inputs ---------------------------------------------------------------------------------------------------
   tar_target(
-    cell_inputs_chunked,
+    gapfilling_inputs_chunked,
     command = {
       purrr::map(BARRA_C2_cell_nos_chunked[[1]], function(cell_no) {
+        # Get initial outputs from vectors (1 cell)
         I_input <- terra::extract(BARRA_C2_rsdsdir_raster, cell_no) %>% unlist() %>% unname()
         T_input <- terra::extract(BARRA_C2_ts_raster, cell_no) %>% unlist() %>% unname()
         S_input <- terra::extract(BRAN_salt_raster, cell_no) %>% unlist() %>% unname()
@@ -360,16 +358,21 @@ list(
           terra::extract(AquaMODIS_Kd_raster, cell_no) %>% unlist() %>% unname()
         )
         hz <- terra::extract(BathyTopo_raster, cell_no) %>% unlist() %>% unname() %>% abs()
+
+        # Gapfill any that need it (8 or 16 cells)
+        # T and I don't need gapfilling because the grid is based on them
+        S_input <- fill_raster_gaps(raster = BRAN_salt_raster, cell = cell_no, output = S_input)
+        U_input <- fill_raster_gaps(raster = BRAN_u_raster, cell = cell_no, output = U_input)
+        V_input <- fill_raster_gaps(raster = BRAN_v_raster, cell = cell_no, output = V_input)
+        Kd_490 <- fill_raster_gaps(raster = AquaMODIS_Kd_raster, cell = cell_no, output = Kd_490)
+        Kd_490 <- Kd_offset + Kd_scale_factor * fill_nas_weighted(Kd_490)
+        hz <- fill_raster_gaps(raster = BathyTopo_raster, cell = cell_no, output = hz)
         
-        N_data <- N_data_prioritised[N_data_prioritised$cell_no == cell_no, ]
-        Ni_input <- N_data$a[N_data$measure == "Ni"] + N_data$b[N_data$measure == "Ni"] * 
-          sin((1:400 * pi + N_data$c[N_data$measure == "Ni"]) / 182.5)
-        Am_input <- N_data$a[N_data$measure == "Am"] + N_data$b[N_data$measure == "Am"] * 
-          sin((1:400 * pi + N_data$c[N_data$measure == "Am"]) / 182.5)
-        
-        df <- data.frame(yday = 1:400,
-                   cell_no = cell_no,
-                   state = as.factor(BARRA_C2_cell_coords$state[BARRA_C2_cell_coords$cell_no == cell_no])) %>%
+        df <- data.frame(
+          yday = 1:400,
+          cell_no = cell_no,
+          state = as.factor(BARRA_C2_cell_coords$state[BARRA_C2_cell_coords$cell_no == cell_no])
+        ) %>%
           mutate(
             I_input = c(I_input, I_input[1:35]),
             T_input = c(T_input, T_input[1:35]),
@@ -377,17 +380,8 @@ list(
             U_input = c(U_input, U_input[1:35]),
             V_input = c(V_input, V_input[1:35]),
             Kd_490 = c(Kd_490, Kd_490[1:35]),
-            Ni_input = Ni_input,
-            Am_input = Am_input,
             hz = hz
           )
-        
-        # Add a small amount of random variation
-        df$Ni_input <- df$Ni_input + rnorm(nrow(df), 0, 0.1) * N_data$sd[N_data$measure == "Ni"]
-        df$Am_input <- df$Am_input + rnorm(nrow(df), 0, 0.1) * N_data$sd[N_data$measure == "Am"]
-        df$Ni_input[df$Ni_input < 0] <- 0
-        df$Am_input[df$Am_input < 0] <- 0
-        df
       }) %>% purrr::list_rbind() %>% 
         # Cleanup and convert to correct units
         mutate(
@@ -402,8 +396,54 @@ list(
         ) %>%
         dplyr::select(-U_input, -V_input)
     },
-    pattern = map(BARRA_C2_cell_nos_chunked, N_data_prioritised)
+    pattern = BARRA_C2_cell_nos_chunked,
+    deployment = "main"
   ),
+
+  tar_target(
+    missing_data,
+    command = {
+      gapfilling_inputs_chunked %>% 
+        group_by(state, cell_no) %>% 
+        reframe(
+          hz = sum(is.na(hz))/400,
+          I_input = sum(is.na(I_input))/400,
+          Kd_490 = sum(is.na(Kd_490))/400,
+          S_input = sum(is.na(S_input))/400,
+          T_input = sum(is.na(T_input))/400,
+          UV_input = sum(is.na(UV_input))/400
+        )
+    },
+    pattern = gapfilling_inputs_chunked
+  ),
+
+  tar_target(
+    cell_inputs_chunked,
+    command = {
+      N_data <- split(N_data_prioritised, N_data_prioritised$cell_no)
+      inputs_data <- split(gapfilling_inputs_chunked, gapfilling_inputs_chunked$cell_no)
+      purrr::map2(inputs_data, N_data, function(inputs, N_dat) {
+        Ni_input <- N_dat$a[N_dat$measure == "Ni"] + N_dat$b[N_dat$measure == "Ni"] * 
+          sin((1:400 * pi + N_dat$c[N_dat$measure == "Ni"]) / 182.5)
+        Am_input <- N_dat$a[N_dat$measure == "Am"] + N_dat$b[N_dat$measure == "Am"] * 
+          sin((1:400 * pi + N_dat$c[N_dat$measure == "Am"]) / 182.5)
+        
+        # Add a small amount of random variation
+        Ni_input <- Ni_input + rnorm(length(Ni_input), 0, 0.1) * N_dat$sd[N_dat$measure == "Ni"]
+        Am_input <- Am_input + rnorm(length(Am_input), 0, 0.1) * N_dat$sd[N_dat$measure == "Am"]
+        Ni_input[Ni_input < 0] <- 0
+        Am_input[Am_input < 0] <- 0
+
+        inputs %>% 
+          mutate(
+            Ni_input = Ni_input,
+            Am_input = Am_input
+          )
+      }) %>% purrr::list_rbind()
+    },
+    pattern = map(gapfilling_inputs_chunked, N_data_prioritised)
+  ),
+
   tar_target(
     state_input_timeseries,
     cell_inputs_chunked %>% 
@@ -417,26 +457,27 @@ list(
         Ni_input_mean = meanna(Ni_input), Ni_input_min = minna(Ni_input), Ni_input_max = maxna(Ni_input), Ni_input_sd = sdna(Ni_input),
         Am_input_mean = meanna(Am_input), Am_input_min = minna(Am_input), Am_input_max = maxna(Am_input), Am_input_sd = sdna(Am_input)
       )
-  ),
-  tar_target(
-    cell_input_chunked_gapfilled,
-    command = {
-      purrr::map(BARRA_C2_cell_nos_chunked[[1]], function(cell_no) {
-        cia <- cell_inputs_chunked[cell_inputs_chunked$cell_no == cell_no, ]
-        state <- unique(cia$state) %>% as.character()
-        sia <- state_input_timeseries[state_input_timeseries$state == state, ]
-        if (any(is.na(cia$I_input))) {cia$I_input <- sia$I_input_mean}
-        if (any(is.na(cia$T_input))) {cia$T_input <- sia$T_input_mean}
-        if (any(is.na(cia$S_input))) {cia$S_input <- sia$S_input_mean}
-        if (any(is.na(cia$Kd_490))) {cia$Kd_490 <- sia$Kd_490_mean}
-        if (any(is.na(cia$Ni_input))) {cia$Ni_input <- sia$Ni_input_mean}
-        if (any(is.na(cia$Am_input))) {cia$Am_input <- sia$Am_input_mean}
-        if (any(is.na(cia$UV_input))) {cia$UV_input <- sia$UV_input_mean}
-        cia
-      }) %>% bind_rows()
-    },
-    pattern = map(BARRA_C2_cell_nos_chunked, cell_inputs_chunked)
   )
+  #,
+  #tar_target(
+  #  cell_input_chunked_gapfilled,
+  #  command = {
+  #    purrr::map(BARRA_C2_cell_nos_chunked[[1]], function(cell_no) {
+  #      cia <- cell_inputs_chunked[cell_inputs_chunked$cell_no == cell_no, ]
+  #      state <- unique(cia$state) %>% as.character()
+  #      sia <- state_input_timeseries[state_input_timeseries$state == state, ]
+  #      if (any(is.na(cia$I_input))) {cia$I_input <- sia$I_input_mean}
+  #      if (any(is.na(cia$T_input))) {cia$T_input <- sia$T_input_mean}
+  #      if (any(is.na(cia$S_input))) {cia$S_input <- sia$S_input_mean}
+  #      if (any(is.na(cia$Kd_490))) {cia$Kd_490 <- sia$Kd_490_mean}
+  #      if (any(is.na(cia$Ni_input))) {cia$Ni_input <- sia$Ni_input_mean}
+  #      if (any(is.na(cia$Am_input))) {cia$Am_input <- sia$Am_input_mean}
+  #      if (any(is.na(cia$UV_input))) {cia$UV_input <- sia$UV_input_mean}
+  #      cia
+  #    }) %>% bind_rows()
+  #  },
+  #  pattern = map(BARRA_C2_cell_nos_chunked, cell_inputs_chunked)
+  #)
 )
 
 

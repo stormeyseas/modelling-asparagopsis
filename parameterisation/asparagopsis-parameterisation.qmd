@@ -39,11 +39,24 @@ library(magrittr)
 library(stringr)
 library(dplyr)
 library(tidyr)
+#| cache: false
+
+library(rmarkdown)
+library(yaml)
+library(magrittr)
+library(stringr)
+library(dplyr)
+library(tidyr)
 library(cowplot)
 library(formatdown)
 library(knitr)
 library(macrogrow)
 library(conflicted)
+library(units)
+library(ggplot2)
+library(here)
+library(qs)
+
 library(units)
 library(ggplot2)
 library(here)
@@ -61,6 +74,8 @@ knitr::opts_knit$set(root.dir = file.path("C:", "Users", "treimer", "Documents",
 ```{r note}
 #| code-summary: |
 #|   All the code in this markdown is set to 'fold' by default. Click each folded code chunk to see its inner workings.
+#| code-summary: |
+#|   All the code in this markdown is set to 'fold' by default. Click each folded code chunk to see its inner workings.
 
 # You did it!
 ```
@@ -70,13 +85,20 @@ knitr::opts_knit$set(root.dir = file.path("C:", "Users", "treimer", "Documents",
 ```{r globals}
 #| code-summary: "Some global defaults I like to use"
 #| cache: false
+#| cache: false
 
 out_path <- here() %>% file.path("data")
+out_path <- here() %>% file.path("data")
 
+prettyplot <- theme_classic() +
 prettyplot <- theme_classic() +
   theme(element_text(family = "sans", size = 12, colour = "black"),
         axis.title.y = element_text(vjust = 2),
         legend.position = "none")
+
+format_sci2 <- function(x) {
+  if (inherits(x, "units")) {format_sci(drop_units(x))} else {format_sci(x)}
+}
 
 format_sci2 <- function(x) {
   if (inherits(x, "units")) {format_sci(drop_units(x))} else {format_sci(x)}
@@ -121,6 +143,9 @@ Left: Gametophytes of _Asparagopsis armata_ (above) and _A. taxiformis_ (below) 
 The different forms may also be very physiologically different in some respects - at the very least with regard to temperature and daylength. Catriona Hurd also thinks it's likely they'll be different in their uptake rates of the different forms of nitrogen.
 
 ```{r defaults, include=FALSE}
+V_am <- K_am <- M_am <- C_am <- V_ni <- K_ni <- M_ni <- C_ni <- V_ot <- K_ot <- M_ot <- C_ot <- Q_min <- Q_max <- K_c <- mu <- N_min <- N_max <- D_m <- D_ve <- D_st <- D_lo <- D_mi <- D_hi <- a_cs <- I_o <- T_opt <- T_min <- T_max <- S_opt <- S_min <- S_max <- h_a <- h_b <- h_c <- h_max <- DWWW <- as.numeric(NA)
+```
+
 V_am <- K_am <- M_am <- C_am <- V_ni <- K_ni <- M_ni <- C_ni <- V_ot <- K_ot <- M_ot <- C_ot <- Q_min <- Q_max <- K_c <- mu <- N_min <- N_max <- D_m <- D_ve <- D_st <- D_lo <- D_mi <- D_hi <- a_cs <- I_o <- T_opt <- T_min <- T_max <- S_opt <- S_min <- S_max <- h_a <- h_b <- h_c <- h_max <- DWWW <- as.numeric(NA)
 ```
 
@@ -204,6 +229,8 @@ torres_uptake <- as.data.frame(S_uM) %>%
          ammonium_combo = lin_uptake(S_uM, M_am_combo, C_am_combo),
          nitrate_alone = lin_uptake(S_uM, M_ni_alone, C_ni_alone),
          nitrate_combo = lin_uptake(S_uM, M_ni_combo, C_ni_combo),
+         nitrate_alone = lin_uptake(S_uM, M_ni_alone, C_ni_alone),
+         nitrate_combo = lin_uptake(S_uM, M_ni_combo, C_ni_combo),
          amacids_alone = lin_uptake(S_uM, M_aa_alone, C_aa_alone),
          amacids_combo = lin_uptake(S_uM, M_aa_combo, C_aa_combo)) %>% 
   pivot_longer(cols = !contains("S_uM"), 
@@ -280,6 +307,7 @@ It's immediately obvious that even though ammonium uptake by MM kinetics increas
 #| code-summary: Compare Michaelis–Menten uptake with linear uptake of ammonium
 #| fig-cap: |
 #|    Uptake of ammonium (green), nitrate (blue) or amino acids (red) by _A. armata_ via Michaelis–Menten kinetics (solid lines) or a linear rate (dashed lines) with increasing substrate concentration (maximum of 30$\mu$M). Dotted lines show reference concentrations of 5, 20 and 50 $\mu$M for reference.
+#|    Uptake of ammonium (green), nitrate (blue) or amino acids (red) by _A. armata_ via Michaelis–Menten kinetics (solid lines) or a linear rate (dashed lines) with increasing substrate concentration (maximum of 30$\mu$M). Dotted lines show reference concentrations of 5, 20 and 50 $\mu$M for reference.
 
 both_uptake <- merge(torres_uptake, schuen_uptake, by = c("S", "form"), all = T) %>% 
   rename(torres = uptake.x, schuenhoff = uptake.y) %>% 
@@ -303,6 +331,8 @@ both_uptake %>%
 
 # Note that even through MM uptake and linear uptake of ammonium are making it into the model, only one uptake shape can be used per nitrogen form at a time and this is specified in the model run.
 
+# Note that even through MM uptake and linear uptake of ammonium are making it into the model, only one uptake shape can be used per nitrogen form at a time and this is specified in the model run.
+
 V_am <- V_am # From Schuenhoff
 K_am <- K_am # From Schuenhoff
 
@@ -310,9 +340,11 @@ M_am <- M_am_combo # From Torres
 C_am <- C_am_combo # From Torres
 
 M_ni <- M_ni_combo # From Torres (constant uptake)
+M_ni <- M_ni_combo # From Torres (constant uptake)
 C_ni <- C_ni_combo # From Torres
 
 M_ot <- M_aa_combo # From Torres
+C_ot <- C_aa_combo # From Torres
 C_ot <- C_aa_combo # From Torres
 ```
 
@@ -438,10 +470,14 @@ There are also different possible ways of converting protein to nitrogen: @angel
 
 N_min <- set_units(min(P_range_arma/100)/N_conv_aspara, "gN gDW-1")
 Q_min <- set_units(N_min, "mgN gDW-1")
+N_min <- set_units(min(P_range_arma/100)/N_conv_aspara, "gN gDW-1")
+Q_min <- set_units(N_min, "mgN gDW-1")
 N_max <- set_units(0.065, "gN gDW-1") # Schuenhoff 2006
+Q_max <- set_units(N_max, "mgN gDW-1")
 Q_max <- set_units(N_max, "mgN gDW-1")
 ```
 
+This gives a minimum N of `r round(100*N_min,2)`% (a $Q_{min}$ of `r round(Q_min, 2)` mg gDW$^{-1}$) and a maximum N-content of `r round(100*N_max,2)`% (a $Q_{max}$ of `r round(Q_max, 2)` mg gDW$^{-1}$), which is a relatively high value for macroalgae.
 This gives a minimum N of `r round(100*N_min,2)`% (a $Q_{min}$ of `r round(Q_min, 2)` mg gDW$^{-1}$) and a maximum N-content of `r round(100*N_max,2)`% (a $Q_{max}$ of `r round(Q_max, 2)` mg gDW$^{-1}$), which is a relatively high value for macroalgae.
 
 # Biomass factors
@@ -479,6 +515,7 @@ These options give DW:WW values of `r round(DWWW_schuen,2)`, `r round(DWWW_sainz
 #| code-summary: Choose which params of those investigated will make it into the model
 
 DWWW <- mean(c(DWWW_nunes_arma, DWWW_nunes_taxi))
+DWWW <- mean(c(DWWW_nunes_arma, DWWW_nunes_taxi))
 ```
 
 ## Height {#sec-height}
@@ -514,6 +551,7 @@ If we assume that 5 plants are growing within 1 m$^{-3}$, then the maximum heigh
 h_a <- drop_units(sizedisN)
 h_b <- 1.5
 h_c <- 0.01
+h_max <- 0.26 %>% set_units("m")
 h_max <- 0.26 %>% set_units("m")
 
 dens <- seq(10, drop_units(sizedisN)+500, 10)
@@ -682,6 +720,12 @@ T_max_taxi <- both$temperature[both$species == "taxiformis" & both$variable == "
 T_min_taxi <- both$temperature[both$species == "taxiformis" & both$variable == "grow_min"] %>% set_units("degree_C")
 T_opt_arma <- mean(c(20,20,15,15,20,20,20,20,20,20,20)) %>% set_units("degree_C")
 T_opt_taxi <- mean(c(25,25,25,25,25,25,25,25,25,20,25,25,25)) %>% set_units("degree_C")
+T_max_arma <- both$temperature[both$species == "armata" & both$variable == "grow_max"] %>% set_units("degree_C")
+T_min_arma <- both$temperature[both$species == "armata" & both$variable == "grow_min"] %>% set_units("degree_C")
+T_max_taxi <- both$temperature[both$species == "taxiformis" & both$variable == "grow_max"] %>% set_units("degree_C")
+T_min_taxi <- both$temperature[both$species == "taxiformis" & both$variable == "grow_min"] %>% set_units("degree_C")
+T_opt_arma <- mean(c(20,20,15,15,20,20,20,20,20,20,20)) %>% set_units("degree_C")
+T_opt_taxi <- mean(c(25,25,25,25,25,25,25,25,25,20,25,25,25)) %>% set_units("degree_C")
 ```
 
 ```{r Tlim test}
@@ -692,7 +736,9 @@ T_opt_taxi <- mean(c(25,25,25,25,25,25,25,25,25,20,25,25,25)) %>% set_units("deg
 test_T <- data.frame(Tc = seq(5, 28, 0.5))
 test_params <- c(T_opt = T_opt_arma, T_max = T_max_arma, T_min = T_min_arma)
 test_T$arma <- sapply(X = test_T$Tc, FUN = T_lim, spec_params = drop_units(test_params))
+test_T$arma <- sapply(X = test_T$Tc, FUN = T_lim, spec_params = drop_units(test_params))
 test_params <- c(T_opt = T_opt_taxi, T_max = T_max_taxi, T_min = T_min_taxi)
+test_T$taxi <- sapply(X = test_T$Tc, FUN = T_lim, spec_params = drop_units(test_params))
 test_T$taxi <- sapply(X = test_T$Tc, FUN = T_lim, spec_params = drop_units(test_params))
 
 pT.2 <- pT.1 +
@@ -814,9 +860,12 @@ dens.1 <- dens.1*N_perc
 dens.1 <- set_units(dens.1, "mgN m-3")
 
 I_o <- 150 %>% set_units("mol m-2 s-1")
+I_o <- 150 %>% set_units("mol m-2 s-1")
 
 test_I <- data.frame(Ic = seq(0, 800, 20))
 site_params_light <- c(d_top = 0.05, hc = 1, kW = 1/100)
+spec_params_light <- c(a_cs = drop_units(a_cs), # This is the a_cs value from Figueroa 2006
+                       I_o = drop_units(I_o), 
 spec_params_light <- c(a_cs = drop_units(a_cs), # This is the a_cs value from Figueroa 2006
                        I_o = drop_units(I_o), 
                        h_max = 0.1) # height is constant at full culture depth range
@@ -834,6 +883,7 @@ ggplot(test_I, aes(x = Ic, y = I_lim)) +
   geom_line() +
   scale_y_continuous(limits = c(0,1)) +
   theme_classic() +
+  geom_vline(xintercept = drop_units(I_o), color = "grey", linetype = "dashed")
   geom_vline(xintercept = drop_units(I_o), color = "grey", linetype = "dashed")
 ```
 
@@ -917,12 +967,46 @@ hall_data <- split.default(hall_data, rep(hall_names, each = 4)[1:ncol(hall_data
   mutate(se = mean_se - mean,
          fig = as.factor(fig),
          label = factor(label, levels = c("static", labels_6)))
+hall_data <- here() %>% file.path("data_raw", "sources", "hall_2023", "hall_2023.csv") %>% read.csv()
+hall_names <- c("hall_2.9", "hall_3.17", "hall_3.18", "hall_3.19", "hall_3.28", "hall_3.29")
+labels_4 <- c('static', 'low', 'mid', 'high')
+labels_5 <- c('low', 'low_mid', 'mid', 'mid_high', 'high')
+labels_6 <- c(labels_5, 'max_high')
 
+hall_data <- split.default(hall_data, rep(hall_names, each = 4)[1:ncol(hall_data)]) %>% 
+  lapply(function(df){
+    # Get information
+    form <- ifelse(any(str_detect(colnames(df), "tetra")), "tetrasporophyte", "gametophyte") %>% unique()
+    treat <- ifelse(any(str_detect(colnames(df), "VE")), "velocity", "turbulence") %>% unique()
+    # Pare down to just data
+    df <- df %>% 
+      mutate_all(as.numeric) %>% 
+      filter(!if_all(everything(), is.na))
+    # Get the correct treatment labelling
+    labels <- if (nrow(df) == 4) {labels_4} else if (nrow(df) == 5) {labels_5} else {labels_6}
+    # Put dataframe together
+    df <- df[,2:ncol(df)]
+    colnames(df) <- c("mean", "label", "mean_se")
+    df$label <- as.factor(labels)
+    df$treat <- as.factor(treat)
+    df$form <- as.factor(form)
+    df
+  }) %>% 
+  purrr::imap(., ~ mutate(.x, fig = .y)) %>% 
+  bind_rows() %>% 
+  mutate(se = mean_se - mean,
+         fig = as.factor(fig),
+         label = factor(label, levels = c("static", labels_6)))
+
+hall_gam_vel <- filter(hall_data, form == "gametophyte" & treat == "velocity")
 hall_gam_vel <- filter(hall_data, form == "gametophyte" & treat == "velocity")
 
 p1 <- ggplot(hall_gam_vel, aes(x = as.numeric(label), y = mean*100, colour = fig)) +
+p1 <- ggplot(hall_gam_vel, aes(x = as.numeric(label), y = mean*100, colour = fig)) +
   geom_point() +
   prettyplot +
+  scale_y_continuous(limits = c(0,15), breaks = seq(0,15,2.5)) +
+  labs(x = "Velocity level", y = "Mean % biomass lost")
   scale_y_continuous(limits = c(0,15), breaks = seq(0,15,2.5)) +
   labs(x = "Velocity level", y = "Mean % biomass lost")
 p1
@@ -936,14 +1020,18 @@ I'm not sure what's going on with Velocity Experiment 2 (in green, above) but th
 
 hall_gam_vel2 <- hall_gam_vel %>% 
   filter(fig != "hall_3.18")
+  filter(fig != "hall_3.18")
 
+line_a <- nls(formula = as.formula(mean ~ a * as.numeric(label)),
 line_a <- nls(formula = as.formula(mean ~ a * as.numeric(label)),
     start = c(a = 0.1),
     data = hall_gam_vel2)
 
 D_ve <- unname(coef(line_a)) %>% set_units("d-1")
+D_ve <- unname(coef(line_a)) %>% set_units("d-1")
 
 p2 <- p1 +
+  geom_line(data = hall_gam_vel2, aes(x = as.numeric(label), y = 100*drop_units(D_ve)*as.numeric(label)), colour = "black")
   geom_line(data = hall_gam_vel2, aes(x = as.numeric(label), y = 100*drop_units(D_ve)*as.numeric(label)), colour = "black")
 p2
 ```
@@ -959,7 +1047,10 @@ p2
 
 hall_gam_turb <- hall_data %>% 
   filter(form == "gametophyte" & treat == "turbulence")
+hall_gam_turb <- hall_data %>% 
+  filter(form == "gametophyte" & treat == "turbulence")
 
+p1 <- ggplot(hall_gam_turb, aes(x = as.numeric(label), y = mean*100, fill = fig)) +
 p1 <- ggplot(hall_gam_turb, aes(x = as.numeric(label), y = mean*100, fill = fig)) +
   geom_col(position = "dodge") +
   prettyplot +
@@ -968,10 +1059,15 @@ p1
 ```
 
 Looks very different between the two experiments, but I'm going to go with the one that shows a clear trend.
+Looks very different between the two experiments, but I'm going to go with the one that shows a clear trend.
 
 ```{r variables for named vector}
 #| code-summary: Get turbulence data ready for vector
 
+D_st <- D_m <- hall_gam_turb$mean[hall_gam_turb$label == "static"] %>% mean() %>% set_units("d-1")
+D_lo <- hall_gam_turb$mean[hall_gam_turb$label == "low"] %>% max() %>% set_units("d-1")
+D_mi <- hall_gam_turb$mean[hall_gam_turb$label == "mid"] %>% max() %>% set_units("d-1")
+D_hi <- hall_gam_turb$mean[hall_gam_turb$label == "high"] %>% max() %>% set_units("d-1")
 D_st <- D_m <- hall_gam_turb$mean[hall_gam_turb$label == "static"] %>% mean() %>% set_units("d-1")
 D_lo <- hall_gam_turb$mean[hall_gam_turb$label == "low"] %>% max() %>% set_units("d-1")
 D_mi <- hall_gam_turb$mean[hall_gam_turb$label == "mid"] %>% max() %>% set_units("d-1")
@@ -983,6 +1079,39 @@ D_hi <- hall_gam_turb$mean[hall_gam_turb$label == "high"] %>% max() %>% set_unit
 
 @tbl-params shows exactly what's going into the species vectors. Note that only one of $V_{am}$ & $K_{am}$ or $M_{am}$ & $C_{am}$ will be used as the macroalgae will not have both linear and Michaelis-Menton uptake of the same nutrient. 
 
+| Parameter | Units | _A. armata_ value | _A. taxiformis_ value | Sources |
+|-----------|:-----:|:--------------:|:--------------:|:-------------------------------|
+| $V_{am}$  | `r as.character(units(V_am))`  | `r format_sci(drop_units(V_am))` | | @schuenhoff_tetrasporophyte_2006 |
+| $K_{am}$  | `r as.character(units(K_am))`  | `r format_sci(drop_units(K_am))` | | @schuenhoff_tetrasporophyte_2006 |
+| $M_{am}$  | `r as.character(units(M_am))`  | `r format_sci(drop_units(M_am))` | | @torres_nitrogen_2021 |
+| $C_{am}$  | `r as.character(units(C_am))`  | `r format_sci(drop_units(C_am))`   | | @torres_nitrogen_2021 |
+| $M_{ni}$  | `r as.character(units(M_ni))`  | `r format_sci(drop_units(M_ni))`   | | @torres_nitrogen_2021 |
+| $C_{ni}$  | `r as.character(units(C_ni))`  | `r format_sci(drop_units(C_ni))`   | | @torres_nitrogen_2021 |
+| $M_{ot}$  | `r as.character(units(M_ot))`  | `r format_sci(drop_units(M_ot))`   | | @torres_nitrogen_2021 |
+| $C_{ot}$  | `r as.character(units(C_ot))`  | `r format_sci(drop_units(C_ot))`   | | @torres_nitrogen_2021 |
+| $K_{c}$   | -                              | `r format_sci(K_c)`              | | @hadley_modeling_2015 |
+| $Q_{min}$ | `r as.character(units(Q_min))` | `r format_sci(drop_units(Q_min))` | | @mihaila_new_2022; @zemke-white_chlorophyte_1999; @angell_protein_2016 |
+| $Q_{max}$ | `r as.character(units(Q_max))` | `r format_sci(drop_units(Q_max))` | | @schuenhoff_tetrasporophyte_2006 |
+| $DWWW$    | `r as.character(units(DWWW))`  | `r format_sci(drop_units(DWWW))` |  | @nunes_evaluation_2024; @roque_effect_2019 |
+| $\mu$     | `r as.character(units(mu))`    | `r format_sci(drop_units(mu))`               | |  |
+| $D_{m}$   | `r as.character(units(D_m))`   | `r format_sci(drop_units(D_m))`    | |  |
+| $D_{v}$   | `r as.character(units(D_ve))`  | `r format_sci(drop_units(D_ve))`    | |  |
+| $D_{lo}$  | `r as.character(units(D_lo))`  | `r format_sci(drop_units(D_lo))` | |  |
+| $D_{mi}$  | `r as.character(units(D_mi))`  | `r format_sci(drop_units(D_mi))` | |  |
+| $D_{hi}$  | `r as.character(units(D_hi))`  | `r format_sci(drop_units(D_hi))` | |  |
+| $I_o$     | `r as.character(units(I_o))`   | `r format_sci(drop_units(I_o))`    | |  |
+| $a_{cs}$  | `r as.character(units(a_cs))`  | `r format_sci(drop_units(a_cs))`    | |  |
+| $T_{opt}$ | `r as.character(units(T_opt_arma))` | `r format_sci(drop_units(T_opt_arma))` | `r format_sci(drop_units(T_opt_taxi))` |  |
+| $T_{min}$ | `r as.character(units(T_min_arma))` | `r format_sci(drop_units(T_min_arma))` | `r format_sci(drop_units(T_min_taxi))` |  |
+| $T_{max}$ | `r as.character(units(T_max_arma))` | `r format_sci(drop_units(T_max_arma))` | `r format_sci(drop_units(T_max_taxi))` |  |
+| $S_{opt}$ | `r as.character(units(S_opt))` | `r format_sci(drop_units(S_opt))` | |  |
+| $S_{min}$ | `r as.character(units(S_min))` | `r format_sci(drop_units(S_min))` | |  |
+| $S_{max}$ | `r as.character(units(S_max))` | `r format_sci(drop_units(S_max))` | |  |
+| $h_a$     | -                              | `r format_sci(h_a)` | |  |
+| $h_b$     | -                              | `r format_sci(h_b)` | |  |
+| $h_c$     | -                              | `r format_sci(h_c)` | |  |
+| $h_{max}$ | `r as.character(units(h_max))` | `r format_sci(drop_units(h_max))` | |  |
+: Final values for species parameters before saving. These are displayed both for transparency and to check that the units have converted correctly. {#tbl-params}
 | Parameter | Units | _A. armata_ value | _A. taxiformis_ value | Sources |
 |-----------|:-----:|:--------------:|:--------------:|:-------------------------------|
 | $V_{am}$  | `r as.character(units(V_am))`  | `r format_sci(drop_units(V_am))` | | @schuenhoff_tetrasporophyte_2006 |
@@ -1088,7 +1217,53 @@ a_taxiformis <- a_armata
 a_taxiformis['T_opt'] <- T_opt_taxi
 a_taxiformis['T_max'] <- T_max_taxi
 a_taxiformis['T_min'] <- T_min_taxi
+a_armata <- c(
+  V_am = V_am %>% set_units("mgN gDW-1 d-1") %>% drop_units(),
+  K_am = K_am %>% set_units("mgN m-3") %>% drop_units(),
+  M_am = M_am %>% set_units("m3 gDW-1 d-1") %>% drop_units(),
+  C_am = C_am %>% set_units("mgN gDW-1 d-1") %>% drop_units(),
+  V_ni = V_ni,
+  K_ni = K_ni,
+  M_ni = M_ni,
+  C_ni = C_ni %>% set_units("mgN gDW-1 d-1") %>% drop_units(),
+  V_ot = V_ot,
+  K_ot = K_ot,
+  M_ot = M_ot %>% set_units("m3 gDW-1 d-1") %>% drop_units(),
+  C_ot = C_ot %>% set_units("mgN gDW-1 d-1") %>% drop_units(),
+  Q_min = drop_units(Q_min), 
+  Q_max = drop_units(Q_max), 
+  K_c = drop_units(Q_min) * 0.85,
+  mu = drop_units(mu),
+  # N_min = N_min,
+  # N_max = N_max,
+  D_m = drop_units(D_m),
+  D_ve = drop_units(D_ve), 
+  D_lo = drop_units(D_lo),
+  D_mi = drop_units(D_mi),
+  D_hi = drop_units(D_hi),
+  a_cs = drop_units(a_cs),                  # or a_cs from figueroa 2006?
+  I_o = drop_units(I_o),
+  T_opt = T_opt_arma,
+  T_min = T_min_arma,
+  T_max = T_max_arma,
+  S_opt = S_opt,
+  S_min = S_min,
+  S_max = S_max,
+  h_a = h_a,
+  h_b = h_b,
+  h_c = h_c,
+  h_max = drop_units(h_max),
+  DWWW = DWWW 
+  )
+
+a_taxiformis <- a_armata
+a_taxiformis['T_opt'] <- T_opt_taxi
+a_taxiformis['T_max'] <- T_max_taxi
+a_taxiformis['T_min'] <- T_min_taxi
 ```
+
+
+The model uses a named vector, which can be loaded straight from Rdata files, but I'm saving as a .csv file because that's easier for human reading. 
 
 
 The model uses a named vector, which can be loaded straight from Rdata files, but I'm saving as a .csv file because that's easier for human reading. 
@@ -1096,11 +1271,32 @@ The model uses a named vector, which can be loaded straight from Rdata files, bu
 ```{r save data}
 #| code-summary: Save named vector and .csv file
 #| eval: true
+#| eval: true
 
 # Save data as a named vector - model uses this
 qsave(a_armata, file = file.path(out_path, "asparagopsis_armata.qs"))
 qsave(a_taxiformis, file = file.path(out_path, "asparagopsis_taxiformis.qs"))
+qsave(a_armata, file = file.path(out_path, "asparagopsis_armata.qs"))
+qsave(a_taxiformis, file = file.path(out_path, "asparagopsis_taxiformis.qs"))
 
+# Save duplicates as CSV - easier for humans to read
+write.csv(
+  data.frame(
+    parameter = names(a_armata),
+    unit = as.character(param_units),
+    value = (unname(a_armata))
+  ),
+  file.path(out_path, "asparagopsis_armata.csv")
+)
+
+write.csv(
+  data.frame(
+    parameter = names(a_taxiformis),
+    unit = as.character(param_units),
+    value = (unname(a_taxiformis))
+  ),
+  file.path(out_path, "asparagopsis_taxiformis.csv")
+)
 # Save duplicates as CSV - easier for humans to read
 write.csv(
   data.frame(
@@ -1131,13 +1327,25 @@ If the 'standard', not species-specific Atkinson ratio of N:P were assumed [@atk
 Phosphates are also not often measured in marine waters, so obtaining ambient data would be extremely difficult.
 
 Still, if the Atkinson ratio (30:1 N:P) were assumed and phosphate uptake kinetics were ignored, then the minimum phosphate concentrations required to maintain the modelled growth can be estimated and reported as an additional consideration.
+## Limitation by other nutrients
 
+It has been suggested that the model should include the possibility of phosphorus limitation, as well as nitrogen limitation (switching between the limiting nutrient based on availability/internal conditions). This was considered because the places where macroalgae is being grown for nitrogen bioremediation purposes (river outflows, next to fish farms) are likely to be very high in nitrogen but not necessarily phosphates. 
+
+However, it was decided not to include phosphorus limitation. While the mechanics of including it would be fairly simple, research into the required parameters (shape and rate of uptake, internal requirements) are almost non-existent for _Asparagopsis_. @grisenthwaite_establishing_2023 may possibly have some of this data for tetrasporophytes(?) but I have yet to find anything similar for gametophytes. 
+If the 'standard', not species-specific Atkinson ratio of N:P were assumed [@atkinson_cnp_1983], then the algae would require 1/30^th^ as much phosphorus as nitrogen to maintain the modelled growth. Given that macroalgae require so much more nitrogen than phosphorus, it seems unlikely that they are ever going to be phosphorus limited in coastal or oceanic waters. 
+Phosphates are also not often measured in marine waters, so obtaining ambient data would be extremely difficult.
+
+Still, if the Atkinson ratio (30:1 N:P) were assumed and phosphate uptake kinetics were ignored, then the minimum phosphate concentrations required to maintain the modelled growth can be estimated and reported as an additional consideration.
+
+* Dissolved inorganic carbon may be a major (perhaps determining?) limiting factor for growth and photosynthesis in _Asparagopsis_ [@zanolla_concise_2022; @mata_direct_2010]
 * Dissolved inorganic carbon may be a major (perhaps determining?) limiting factor for growth and photosynthesis in _Asparagopsis_ [@zanolla_concise_2022; @mata_direct_2010]
   * @sainz-villegas_modelling_2024 and @sainz-villegas_exploring_2024 investigated the survival of vegetative propagules (juvenile gametophytes) - potential to estimate propagation/spread based on wave exposure
 * @mata_within-species_2017 looked at temperature effects on the production of bromoforms
 
 # Code
 
+This document was written in Quarto [@quarto]. All code used R version `r R.version[['major']]`.`r R.version[['minor']]` "`r R.version[['nickname']]`" [@R_base], and major packages used include `r cite_packages(packs)`.
+For a full list of R packages used see the lockfile on [Github](https://www.github.com).
 This document was written in Quarto [@quarto]. All code used R version `r R.version[['major']]`.`r R.version[['minor']]` "`r R.version[['nickname']]`" [@R_base], and major packages used include `r cite_packages(packs)`.
 For a full list of R packages used see the lockfile on [Github](https://www.github.com).
 

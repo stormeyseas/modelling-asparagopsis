@@ -19,8 +19,10 @@ remove_unit("mol")
 install_unit("mol", def = "14.0067 g")
 
 output_path <- here() %>% file.path("data", "processed_species")
+output_path <- here() %>% file.path("data", "processed_species")
 
 Sys.setenv(TAR_PROJECT = "project_species")
+tar_names <- tar_manifest()$name
 tar_names <- tar_manifest()$name
 
 spec_ni_uptake <- c("linear", "linear")
@@ -87,6 +89,7 @@ rm(sali)
 ## Light --------------------------------------------------------------------------------------------------------
 light <- data.frame(light = seq(0, 1600, 25))
 tar_load(culture_depths)
+tar_load(culture_depths)
 ls1 <- list()
 for (d in 1:length(culture_depths)) {
   light$armata <- sapply(X = light$light, FUN = I_lim, kW = 0.1, Nf = 500, site_params = c(d_top = culture_depths[d], kW = 0.2), spec_params = armata)
@@ -102,7 +105,10 @@ rm(light, ls1)
 
 # Sensitivities ---------------------------------------------------------------------------------------------------
 tar_load(factors)
+tar_load(factors)
 ## Conditions -----------------------------------------------------------------------------------------------------
+tar_load(sens_conditions) 
+sens_conditions %>%
 tar_load(sens_conditions) 
 sens_conditions %>%
   rename(t = t_span) %>%
