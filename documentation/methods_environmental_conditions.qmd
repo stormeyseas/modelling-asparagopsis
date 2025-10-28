@@ -1,0 +1,754 @@
+---
+title: "Methods: Environmental inputs"
+author: Tormey Reimer
+date: last-modified
+---
+
+```{r setup}
+#| eval: true
+#| include: false
+#| cache: false
+
+# You need quarto to generate this markdown - install here: https://quarto.org/docs/get-started/
+
+library(stringr)
+library(units)
+library(targets)
+library(tarchetypes)
+library(macrogrow)
+library(ozmaps)
+library(arrow)
+library(gganimate)
+library(magrittr)
+library(ggplot2)
+library(dplyr)
+library(terra)
+library(tidyterra)
+library(here)
+library(lubridate)
+library(tidyr)
+library(cowplot)
+library(purrr)
+library(patchwork)
+library(conflicted)
+library(gridExtra)
+library(grid)
+
+conflicts_prefer(dplyr::select, dplyr::filter)
+
+source(here("R_scripts/00_functions.R"))
+source(here("R_scripts/00_global_displays.R"))
+```
+
+# Cell information
+
+```{r cell-coords}
+#| eval: true
+#| code-summary: |
+#|   Load in all the BARRA-R2 cells being used, with their coordinates.
+
+cell_coords <- find_read(envi_data, "R2_cell_coords") %>% 
+  mutate(state = factor(state, levels = states_ord)) %>% 
+  dplyr::select(-layer)
+cells_included <- find_read(runs_data, "include")
+cells_omitted <- find_read(runs_data, "omit")
+
+totals <- cell_coords %>% 
+  filter(!cell_no %in% cells_omitted) %>% 
+  group_by(state) %>% 
+  reframe(cells = n())
+```
+
+The waters around Australia were divided into `r as.integer(sum(totals$cells))` cells for this analysis: 
+`r as.integer(totals$cells[totals$state == "VIC"])` in Victoria, 
+`r as.integer(totals$cells[totals$state == "NSW"])` in New South Wales, 
+`r as.integer(totals$cells[totals$state == "QLD"])` in Queensland, 
+`r as.integer(totals$cells[totals$state == "SAU"])` in South Australia, 
+`r as.integer(totals$cells[totals$state == "WAN"]+totals$cells[totals$state == "WAS"])` in Western Australia (divided into 
+`r as.integer(totals$cells[totals$state == "WAN"])` cells in the north and 
+`r as.integer(totals$cells[totals$state == "WAS"])` in the south), 
+`r as.integer(totals$cells[totals$state == "TAS"])` in Tasmania, and 
+`r as.integer(totals$cells[totals$state == "NTE"])` in the Northern Territory. 
+
+```{r fig-states-map}
+#| fig-width: 6
+#| fig-height: 7.5
+#| fig-cap: |
+#|   Map showing the area included this analysis, with colours indicating the different states. The ~60 km coastline buffer includes 95,418 cells approximately 4 x 4 km each.
+
+p_cell_map <- cell_coords %>% 
+  ggplot(aes(x = longitude, y = latitude, fill = state, label = cell_no)) +
+  geom_raster() +
+  geom_sf(data = ozmap_data(data = "states"), inherit.aes = F) +
+  coord_sf(xlim = c(bounds[["AUS"]]["lonmin"], bounds[["AUS"]]["lonmax"]),
+           ylim = c(bounds[["AUS"]]["latmin"], bounds[["AUS"]]["latmax"])) +
+  # coord_sf(xlim = c(149.5, 151.5),
+  #          ylim = c(-39, -37)) +
+  # geom_text(size = 2.25) +
+  scale_x_continuous(breaks = seq(100, 160, 5)) +
+  scale_y_continuous(breaks = seq(-5, -45, -5)) +
+  scale_fill_manual(values = states_pal) +
+  labs(x = "Longitude", y = "Latitude") +
+  prettyplot() +
+  theme(legend.position = "none")
+
+p_cell_map
+```
+
+# Environmental inputs
+
+```{r all-cell-input-timeseries}
+
+T_input <- file.path(envi_data, "cell_input_all") %>% 
+  list.files(full.names = T) %>% 
+  purrr::map(function(fnm) {
+    fnm %>% arrow::read_parquet(col_select = c("cell_no", "state", "yday", "T_input"))
+  }) %>% 
+  bind_rows() %>% 
+  mutate(state = factor(state, levels = states_ord, labels = states_lng))
+
+(T_means <- T_input %>% 
+  group_by(state) %>% 
+  reframe(mean = mean(T_input, na.rm = T),
+          max = max(T_input, na.rm = T),
+          min = min(T_input, na.rm = T)) %>% 
+  mutate(variable = "T_input"))
+
+I_input <- file.path(envi_data, "cell_input_all") %>% 
+  list.files(full.names = T) %>% 
+  purrr::map(function(fnm) {
+    fnm %>% arrow::read_parquet(col_select = c("cell_no", "state", "yday", "I_input"))
+  }) %>% 
+  bind_rows() %>% 
+  mutate(state = factor(state, levels = states_ord, labels = states_lng))
+
+(I_means <- I_input %>% 
+  group_by(state) %>% 
+  reframe(mean = mean(I_input, na.rm = T),
+          max = max(I_input, na.rm = T),
+          min = min(I_input, na.rm = T)) %>% 
+  mutate(variable = "I_input"))
+
+K_input <- file.path(envi_data, "cell_input_all") %>% 
+  list.files(full.names = T) %>% 
+  purrr::map(function(fnm) {
+    fnm %>% arrow::read_parquet(col_select = c("cell_no", "state", "yday", "Kd_490"))
+  }) %>% 
+  bind_rows() %>% 
+  mutate(state = factor(state, levels = states_ord, labels = states_lng))
+
+(K_means <- K_input %>% 
+  group_by(state) %>% 
+  reframe(mean = mean(Kd_490, na.rm = T),
+          max = max(Kd_490, na.rm = T),
+          min = min(Kd_490, na.rm = T)) %>% 
+  mutate(variable = "Kd_490"))
+
+S_input <- file.path(envi_data, "cell_input_all") %>% 
+  list.files(full.names = T) %>% 
+  purrr::map(function(fnm) {
+    fnm %>% arrow::read_parquet(col_select = c("cell_no", "state", "yday", "S_input"))
+  }) %>% 
+  bind_rows() %>% 
+  mutate(state = factor(state, levels = states_ord, labels = states_lng))
+
+(S_means <- S_input %>% 
+  group_by(state) %>% 
+  reframe(mean = mean(S_input, na.rm = T),
+          max = max(S_input, na.rm = T),
+          min = min(S_input, na.rm = T)) %>% 
+  mutate(variable = "S_input"))
+
+UV_input <- file.path(envi_data, "cell_input_all") %>% 
+  list.files(full.names = T) %>% 
+  purrr::map(function(fnm) {
+    fnm %>% arrow::read_parquet(col_select = c("cell_no", "state", "yday", "UV_input"))
+  }) %>% 
+  bind_rows() %>% 
+  mutate(state = factor(state, levels = states_ord, labels = states_lng))
+
+(UV_means <- UV_input %>% 
+  group_by(state) %>% 
+  reframe(mean = mean(UV_input, na.rm = T),
+          max = max(UV_input, na.rm = T),
+          min = min(UV_input, na.rm = T)) %>% 
+  mutate(variable = "UV_input"))
+```
+
+Mean daily temperature ranged from 
+`r round(min(T_means$mean), 1)` in `r as.character(T_means$state[T_means$mean == min(T_means$mean)])` to 
+`r round(max(T_means$mean), 1)` in `r as.character(T_means$state[T_means$mean == max(T_means$mean)])`,
+with a mean across states of `r round(mean(T_means$mean), 1)`. 
+
+```{r fig-T-input}
+#| fig-width: 6
+#| fig-height: 7.75
+#| fig-cap: |
+#|   Summary of temperature values across the year within each state, averaged across 2019-2023. Bold lines show the mean across all cells within each state while ribbons show the standard deviation between cells.
+
+T_input_state <- T_input %>%
+  group_by(state, yday) %>% 
+  reframe(value = mean(T_input, na.rm = T),
+          sd = sd(T_input, na.rm = T))
+
+(
+  p_input_state_av <- T_input_state %>% 
+    ggplot(aes(x = yday, y = value, ymin = value-sd, ymax = value+sd, colour = state, fill = state)) +
+    geom_line(linewidth = 0.75) +
+    geom_ribbon(alpha = 0.35, linewidth = 0.25) +
+    facet_wrap(facets = vars(state), ncol = 2) +
+    scale_y_continuous(breaks = seq(0, 40, 5), limits = c(10, 35)) +
+    scale_colour_manual(values = states_pal) +
+    scale_fill_manual(values = states_pal) +
+    env_plot() +
+    labs(x = "Day of the year", y = expression("Temperature ("*degree*"C)"))
+)
+```
+
+Mean daily irradiance ranged from 
+`r round(min(I_means$mean), 0)` in `r as.character(I_means$state[I_means$mean == min(I_means$mean)])` to 
+`r round(max(I_means$mean), 0)` in `r as.character(I_means$state[I_means$mean == max(I_means$mean)])`,
+with a mean across states of `r round(mean(I_means$mean), 0)`. 
+
+```{r fig-I-input}
+#| fig-width: 6
+#| fig-height: 7.75
+#| fig-cap: |
+#|   Summary of irradiance values across the year within each state, averaged across 2019-2023. Bold lines show the mean across all cells within each state while ribbons show the standard deviation between cells. 
+
+I_input_state <- I_input %>%
+  group_by(state, yday) %>% 
+  reframe(value = mean(I_input, na.rm = T),
+          sd = sd(I_input, na.rm = T))
+
+p_input_state_av %+% I_input_state +
+  scale_y_continuous(breaks = seq(0, 1600, 150), limits = c(0, 650)) +
+  labs(x = "Day of the year", y = expression("Irradiance (photons m"^-2*" s"^-1*")")) 
+```
+
+Mean daily values for the light attenuation coefficient in water ranged from 
+`r round(100*min(K_means$mean), 2)` $\times 10^2$ in 
+`r as.character(K_means$state[K_means$mean == min(K_means$mean)])` to 
+`r round(10*max(K_means$mean), 2)` $\times 10$ in 
+`r as.character(K_means$state[K_means$mean == max(K_means$mean)])`,
+with a mean across states of `r round(100*mean(K_means$mean), 2)` $\times 10^2$. 
+
+```{r fig-kW-input}
+#| fig-width: 6
+#| fig-height: 7.75
+#| fig-cap: |
+#|   Summary of irradiance values across the year within each state, averaged across 2019-2023. Bold lines show the mean across all cells within each state while ribbons show the standard deviation between cells. 
+
+K_input_state <- K_input %>%
+  group_by(state, yday) %>% 
+  reframe(value = mean(Kd_490, na.rm = T),
+          sd = sd(Kd_490, na.rm = T)) %>% 
+  mutate(sd = case_when(sd > value ~ value, T ~ sd))
+
+p_input_state_av %+% K_input_state +
+  scale_y_continuous(breaks = seq(0, 0.7, 0.1), limits = c(0, 0.62)) +
+  labs(x = "Day of the year", y = expression("Light attenuation coefficient (m"^-1*" )"))
+```
+
+Mean daily salinity ranged from 
+`r round(min(S_means$mean), 1)` in `r as.character(S_means$state[S_means$mean == min(S_means$mean)])` to 
+`r round(max(S_means$mean), 1)` in `r as.character(S_means$state[S_means$mean == max(S_means$mean)])`,
+with a mean across states of `r round(mean(S_means$mean), 1)`. 
+
+```{r fig-S-input}
+#| fig-width: 6
+#| fig-height: 7.75
+#| fig-cap: |
+#|   Summary of salinity values across the year within each state, averaged across 2019-2023 and all depths < 25 m. Bold lines show the mean across all cells within each state while ribbons show the standard deviation between cells.
+
+S_input_state <- S_input %>%
+  group_by(state, yday) %>% 
+  reframe(value = mean(S_input, na.rm = T),
+          sd = sd(S_input, na.rm = T))
+
+p_input_state_av %+% S_input_state +
+  scale_y_continuous(breaks = seq(30, 40, 0.5), limits = c(33.85, 36.5)) +
+  labs(x = "Day of the year", y = expression("Salinity (g L"^-1*")"))
+```
+
+Mean daily water velocity ranged from 
+`r round(min(UV_means$mean), 2)` in `r as.character(UV_means$state[UV_means$mean == min(UV_means$mean)])` to 
+`r round(max(UV_means$mean), 2)` in `r as.character(UV_means$state[UV_means$mean == max(UV_means$mean)])`,
+with a mean across states of `r round(mean(UV_means$mean), 2)`. 
+
+```{r fig-UV-input}
+#| fig-width: 6
+#| fig-height: 7.75
+#| fig-cap: |
+#|   Summary of water velocity values across the year within each state, averaged across 2019-2023 and all depths < 25 m. Bold lines show the mean across all cells within each state while ribbons show the standard deviation between cells.
+
+UV_input_state <- UV_input %>%
+  group_by(state, yday) %>% 
+  reframe(value = mean(UV_input, na.rm = T),
+          sd = sd(UV_input, na.rm = T)) %>% 
+  mutate(sd_min = case_when(sd > value ~ value, T ~ sd))
+
+(
+  p_input_state_av <- UV_input_state %>% 
+    ggplot(aes(x = yday, y = value, ymin = value-sd_min, ymax = value+sd, colour = state, fill = state)) +
+    geom_line(linewidth = 0.75) +
+    geom_ribbon(alpha = 0.35, linewidth = 0.25) +
+    facet_wrap(facets = vars(state), ncol = 2) +
+    scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(-0.01, 1)) +
+    scale_colour_manual(values = states_pal) +
+    scale_fill_manual(values = states_pal) +
+    env_plot() +
+    labs(x = "Day of the year", y = expression("Water velocity (m s"^-1*")"))
+)
+```
+
+## Ambient nitrogen
+
+```{r N-data sources locations}
+refstation_locations <- here() %>% 
+  file.path("data", "nitrogen", "refstation_locations.parquet") %>% 
+  arrow::read_parquet() %>% 
+  rename(name = StationName) %>% 
+  dplyr::select(-code)
+
+outfall_locations <- here() %>% 
+  file.path("data_raw", "national-outfall-database", "data-output", "outflow_site_locations.parquet") %>% 
+  arrow::read_parquet() %>% 
+  rename(lon = longitude,
+         lat = latitude) %>% 
+  dplyr::select(-state)
+
+N_locations <- rbind(
+  outfall_locations %>% mutate(type = "outfall"),
+  refstation_locations %>% mutate(type = "refstation")
+) %>% 
+  mutate(name = as.character(name),
+         state = case_when(
+    lon > bounds[["SAU"]]["lonmin"] & lon <= bounds[["SAU"]]["lonmax"] & 
+      lat > bounds[["SAU"]]["latmin"] & lat <= bounds[["SAU"]]["latmax"]  ~ "SAU",
+    lon > bounds[["QLD"]]["lonmin"] & lon <= bounds[["QLD"]]["lonmax"] & 
+      lat > bounds[["QLD"]]["latmin"] & lat <= bounds[["QLD"]]["latmax"]  ~ "QLD",
+    lon > bounds[["WAS"]]["lonmin"] & lon <= bounds[["WAS"]]["lonmax"] & 
+      lat > bounds[["WAS"]]["latmin"] & lat <= bounds[["WAS"]]["latmax"]  ~ "WAS",
+    lon > bounds[["WAN"]]["lonmin"] & lon <= bounds[["WAN"]]["lonmax"] & 
+      lat > bounds[["WAN"]]["latmin"] & lat <= bounds[["WAN"]]["latmax"]  ~ "WAN",
+    lon > bounds[["VIC"]]["lonmin"] & lon <= bounds[["VIC"]]["lonmax"] & 
+      lat > bounds[["VIC"]]["latmin"] & lat <= bounds[["VIC"]]["latmax"]  ~ "VIC",
+    lon > bounds[["NSW"]]["lonmin"] & lon <= bounds[["NSW"]]["lonmax"] & 
+      lat > bounds[["NSW"]]["latmin"] & lat <= bounds[["NSW"]]["latmax"]  ~ "NSW",
+    lon > bounds[["NTE"]]["lonmin"] & lon <= bounds[["NTE"]]["lonmax"] & 
+      lat > bounds[["NTE"]]["latmin"] & lat <= bounds[["NTE"]]["latmax"]  ~ "NTE",
+    lon > bounds[["TAS"]]["lonmin"] & lon <= bounds[["TAS"]]["lonmax"] & 
+      lat > bounds[["TAS"]]["latmin"] & lat <= bounds[["TAS"]]["latmax"]  ~ "TAS",
+    TRUE ~ NA
+  ),
+  state = factor(state, levels = states_ord)) %>% 
+  relocate(state, .before = name) %>% 
+  rename(latitude = lat,
+         longitude = lon)
+
+refstation_locations <- filter(N_locations, type == "refstation")
+outfall_locations <- filter(N_locations, type == "outfall")
+```
+
+```{r fig-N-data-locations}
+#| fig-cap: Map showing the locations of recorded outfalls (points, coloured by state) and the IMOS reference stations (stars) used in this analysis.
+
+ggplot(N_locations, aes(x = longitude, y = latitude, color = state, shape = type)) +
+  geom_sf(data = ozmap_data(data = "states"), inherit.aes = F) +
+  coord_sf(xlim = c(bounds[["AUS"]]["lonmin"], bounds[["AUS"]]["lonmax"]),
+           ylim = c(bounds[["AUS"]]["latmin"], bounds[["AUS"]]["latmax"])) +
+  geom_point(size = 3.5) +
+  scale_shape_manual(values = c(20, 13)) +
+  # scale_colour_manual(values = states_pal, labels = states_lng, na.value = "black") +
+  scale_color_manual(values = states_pal) +
+  scale_x_continuous(breaks = seq(100, 160, 5)) +
+  scale_y_continuous(breaks = seq(-5, -45, -5)) +
+  labs(x = "Longitude", y = "Latitude") +
+  prettyplot() +
+  theme(legend.position = "none")
+```
+
+```{r cell-matching}
+all_cells <- sum(totals$cells)
+
+cells_by_station <- file.path(envi_data, "N_data_cells_bystation.parquet") %>% read_parquet()
+cells_by_station_1 <- cells_by_station %>% 
+  filter(data_source == "refstation") %>% 
+  mutate(name = droplevels(name))
+cells_by_station_2 <- cells_by_station %>% filter(data_source != "refstation")
+stations_by_cell <- file.path(envi_data, "N_data_stations_bycell.parquet") %>% read_parquet()
+stations_by_cell_1 <- stations_by_cell %>% filter(data_source == "refstation")
+stations_by_cell_2 <- stations_by_cell %>% filter(data_source != "refstation")
+
+# levels(cells_by_station_1$name)
+```
+
+Matching model cells to their two nearest reference stations resulted in 
+`r round(100*cells_by_station_1$prop[cells_by_station_1$name == "NTE_darwin"], 1)`% of cells using data from Darwin, 
+`r round(100*cells_by_station_1$prop[cells_by_station_1$name == "SAU_kanga"], 1)`% using data from Kangaroo Island, 
+`r round(100*cells_by_station_1$prop[cells_by_station_1$name == "TAS_maria"], 1)`% using data from Maria Island, 
+`r round(100*cells_by_station_1$prop[cells_by_station_1$name == "QLD_strad"], 1)`% from North Stradbroke Island, 
+`r round(100*cells_by_station_1$prop[cells_by_station_1$name == "NSW_hack"], 1)`% using data from Port Hacking, 
+`r round(100*cells_by_station_1$prop[cells_by_station_1$name == "WAU_rott"], 1)`% using data from Rottnest Island, and 
+`r round(100*cells_by_station_1$prop[cells_by_station_1$name == "QLD_yonga"], 1)`% using data from Yongala. 
+
+There were 
+`r nrow(outfall_locations[outfall_locations$state == "SAU", ])` outfall stations in South Australia, 
+`r nrow(outfall_locations[outfall_locations$state == "WAS", ])` in southern Western Australia, 
+`r nrow(outfall_locations[outfall_locations$state == "WAN", ])` in northern Western Australia, 
+`r nrow(outfall_locations[outfall_locations$state == "NSW", ])` in southern New South Wales, 
+`r nrow(outfall_locations[outfall_locations$state == "QLD", ])` in Queensland, 
+`r nrow(outfall_locations[outfall_locations$state == "VIC", ])` in Victoria, 
+`r nrow(outfall_locations[outfall_locations$state == "TAS", ])` in Tasmania, and
+`r nrow(outfall_locations[outfall_locations$state == "NTE", ])` in the Northern Territory.
+
+Matching cells to outfall stations within 48 km resulted in 
+`r round(100*nrow(stations_by_cell_2[stations_by_cell_2$num == 1,])/all_cells,1)`% of cells using data from one outfall site,
+`r round(100*nrow(stations_by_cell_2[stations_by_cell_2$num %in% c(2,3),])/all_cells,1)`% of cells using data from two or three sites,
+`r round(100*nrow(stations_by_cell_2[stations_by_cell_2$num %in% c(4,5),])/all_cells,1)`% of cells using data from three or four sites,
+`r round(100*nrow(stations_by_cell_2[stations_by_cell_2$num %in% c(6:8),])/all_cells,1)`% of cells using data from six to eight sites, and 
+`r round(100*nrow(stations_by_cell_2[stations_by_cell_2$num %in% c(9:12),])/all_cells,1)`% of cells using data from nine to twelve sites.
+The remaining 
+`r round(100*(all_cells-nrow(stations_by_cell_2))/all_cells,1)`% of cells did not use data from any outfall sites. 
+
+```{r fig-example-N-input}
+#| fig-cap: An example of the daily nitrate (top) and ammonium (bottom) input and data for a single cell in New South Wales. Black lines show the input driving the growth model (constructed curve), blue dots show data from the nearest reference station (Port Hacking) and orange dots show distance-weighted data from the three nearest outfall points (Bateman’s Bay, Bermagui, and Bombo). 
+
+# stations_by_cell %>% filter(data_source != "refstation" & num>=2) %>% merge(cell_coords, by = "cell_no") %>% filter(state == "NSW") %>% pull(cell_no) %>% sample(size = 1)
+eg_cell <- 108843
+
+BARRA_R2_cell_nos <- file.path(envi_data, "BARRA_R2_cell_nos.qs") %>% qs::qread()
+ind <- which(BARRA_R2_cell_nos == eg_cell)
+
+N_data <- find_read(file.path(envi_data, "combined_N_data"), "N_data_combined") %>% 
+  filter(cell_no == eg_cell) %>% 
+  mutate(value = value %>% set_units("mg m-3") %>% set_units("umol L-1") %>% drop_units())
+
+N_curve <- find_read(file.path(envi_data, "combined_N_data"), "parameter") %>% 
+  filter(cell_no == eg_cell) 
+N_curve <- data.frame(yday = 1:365) %>% 
+  mutate(ammonia = N_curve$a[N_curve$measure == "Am"] + N_curve$b[N_curve$measure == "Am"] * 
+           sin((yday * pi + N_curve$c[N_curve$measure == "Am"]) / 182.5),
+         nitrate_nitrite = N_curve$a[N_curve$measure == "Ni"] + N_curve$b[N_curve$measure == "Ni"] * 
+           sin((yday * pi + N_curve$c[N_curve$measure == "Ni"]) / 182.5)) %>% 
+  pivot_longer(names_to = "indicator", values_to = "value", cols = c("ammonia", "nitrate_nitrite"), 
+               names_transform = list(indicator = as.factor)) %>% 
+  mutate(value = value %>% set_units("mg m-3") %>% set_units("umol L-1"))
+
+N_input <- file.path(envi_data, "cell_input_all") %>% 
+  list.files(full.names = T) %>% 
+  purrr::map(function(fnm){
+    read_parquet(fnm) %>% 
+      filter(cell_no == eg_cell)
+  }) %>% 
+  bind_rows() %>% 
+  select(yday, Ni_input, Am_input) %>% 
+  pivot_longer(names_to = "indicator", values_to = "value", cols = c("Ni_input", "Am_input"), 
+               names_transform = list(indicator = as.factor)) %>% 
+  mutate(value = value %>% set_units("mg m-3") %>% set_units("umol L-1") %>% drop_units(),
+         indicator = factor(indicator, levels = c("Am_input", "Ni_input"), labels = levels(N_data$indicator)))
+
+ggplot(N_data, aes(x = yday, y = value, fill = data_source, colour = data_source, size = weight)) +
+  geom_point(shape = 21, alpha = 0.15) +
+  facet_wrap(facets = vars(indicator), nrow = 2, scales = "free") +
+  geom_line(data = N_input, aes(x = yday, y = value), inherit.aes = F) +
+  scale_fill_manual(values = c("steelblue", "orange")) +
+  scale_colour_manual(values = c("steelblue", "orange")) +
+  # scale_y_continuous(limits = c(0, 3.5), breaks = seq(0, 4, 0.5)) +
+  env_plot() +
+  theme(strip.text = element_blank(), aspect.ratio = 0.55) +
+  scale_x_continuous(breaks = seq(0,360,60)) +
+  labs(x = "Day of the year", y = nitrogen_lab)
+```
+
+```{r Ni input data}
+#| eval: true
+
+Ni_input <- file.path(envi_data, "cell_input_all") %>% 
+  list.files(full.names = T) %>% 
+  purrr::map(function(fnm) {
+    fnm %>% arrow::read_parquet(col_select = c("cell_no", "state", "yday", "Ni_input"))
+  }) %>% 
+  bind_rows() %>% 
+  mutate(state = factor(state, levels = states_ord, labels = states_lng)) %>% 
+  mutate(Ni_input = Ni_input %>% set_units("mg m-3") %>% set_units("umol L-1"))
+
+(Ni_means <- Ni_input %>% 
+  group_by(state) %>% 
+  reframe(mean = mean(Ni_input, na.rm = T),
+          max = max(Ni_input, na.rm = T),
+          min = min(Ni_input, na.rm = T)) %>% 
+  mutate(variable = "Ni_input"))
+
+Ni_input %>% 
+  pull(Ni_input) %>% 
+  max()
+(3.314379 + 3.5)/3.314379
+```
+
+Mean daily water velocity ranged from 
+`r round(min(Ni_means$mean), 2)` in `r as.character(Ni_means$state[Ni_means$mean == min(Ni_means$mean)])` to 
+`r round(max(Ni_means$mean), 2)` in `r as.character(Ni_means$state[Ni_means$mean == max(Ni_means$mean)])`,
+with a mean across states of `r round(mean(Ni_means$mean), 2)`. 
+
+```{r fig-Ni-input}
+#| eval: true
+#| fig-cap: |
+#|   Summary of nitrate concentration values across the year within each state, averaged across 2019-2023. Bold lines show the mean across all cells within each state while ribbons show the standard deviation between cells.
+
+Ni_input_state <- Ni_input %>%
+  group_by(state, yday) %>% 
+  reframe(value = mean(Ni_input, na.rm = T),
+          sd = sd(Ni_input, na.rm = T)) %>% 
+  mutate(value = value %>% drop_units())
+
+(
+  p_input_state_av <- Ni_input_state %>% 
+    ggplot(aes(x = yday, y = value, ymin = value-sd, ymax = value+sd, colour = state, fill = state)) +
+    geom_line(linewidth = 0.75) +
+    geom_ribbon(alpha = 0.35, linewidth = 0.25) +
+    facet_wrap(facets = vars(state), ncol = 2) +
+    # scale_y_continuous(breaks = seq(0, 40, 5), limits = c(10, 35)) +
+    scale_colour_manual(values = states_pal) +
+    scale_fill_manual(values = states_pal) +
+    env_plot() +
+    labs(x = "Day of the year", y = nitrate_lab)
+)
+```
+
+```{r Am input data}
+#| eval: true
+
+Am_input <- file.path(envi_data, "cell_input_all") %>% 
+  list.files(full.names = T) %>% 
+  purrr::map(function(fnm) {
+    fnm %>% arrow::read_parquet(col_select = c("cell_no", "state", "yday", "Am_input"))
+  }) %>% 
+  bind_rows() %>% 
+  mutate(state = factor(state, levels = states_ord, labels = states_lng)) %>% 
+  mutate(Am_input = Am_input %>% set_units("mg m-3") %>% set_units("umol L-1"))
+
+(Am_means <- Am_input %>% 
+  group_by(state) %>% 
+  reframe(mean = mean(Am_input, na.rm = T),
+          max = max(Am_input, na.rm = T),
+          min = min(Am_input, na.rm = T)) %>% 
+  mutate(variable = "Am_input"))
+
+Am_input %>% 
+  pull(Am_input) %>% 
+  max()
+(0.4390794 + 6.5)/0.4390794
+
+supp_times <- list()
+for (st in 1:8) {
+  state <- levels(Am_input$state)[st]
+  supp_times[[st]] <- rbind(
+    Am_input %>% 
+      filter(state == state) %>% 
+      rename(value = Am_input) %>% 
+      mutate(value = drop_units(value), supp_value = value + 6.5), 
+    Ni_input %>% 
+      filter(state == state) %>% 
+      rename(value = Ni_input) %>% 
+      mutate(value = drop_units(value), supp_value = value + 6.5)
+  ) %>% 
+    group_by(cell_no, yday) %>% 
+    reframe(
+      value = sum(value, na.rm = T),
+      supp_value = sum(supp_value, na.rm = T)
+    ) %>% 
+    mutate(times = supp_value/value)
+}
+supp_times <- bind_rows(supp_times)
+
+max(supp_times$times)
+mean(supp_times$times)
+```
+
+Mean daily water velocity ranged from 
+`r round(min(Am_means$mean), 2)` in `r as.character(Am_means$state[Am_means$mean == min(Am_means$mean)])` to 
+`r round(max(Am_means$mean), 2)` in `r as.character(Am_means$state[Am_means$mean == max(Am_means$mean)])`,
+with a mean across states of `r round(mean(Am_means$mean), 2)`. 
+
+```{r fig-Am-input}
+#| eval: true
+#| fig-cap: |
+#|   Summary of ammonium concentration values across the year within each state, averaged across 2019-2023. Bold lines show the mean across all cells within each state while ribbons show the standard deviation between cells.
+
+Am_input_state <- Am_input %>%
+  group_by(state, yday) %>% 
+  reframe(value = mean(Am_input, na.rm = T),
+          sd = sd(Am_input, na.rm = T)) %>% 
+  mutate(value = value %>% drop_units())
+
+p_input_state_av %+% Am_input_state +
+  # scale_y_continuous(breaks = seq(30, 40, 0.5), limits = c(34, 36.5)) +
+  labs(x = "Day of the year", y = ammonium_lab)
+```
+
+# Cell bathymetry
+
+```{r cell bathy data}
+
+cell_bathy <- file.path(envi_data, "cell_bathy.parquet") %>% 
+  arrow::read_parquet() %>% 
+  rename(bathy = hz) %>% 
+  mutate(bathy = -bathy,
+         bathy = case_when(bathy <= -200 ~ -200, TRUE ~ bathy)) %>% 
+  merge(cell_coords, by = "cell_no")
+
+lims <- cell_bathy %>% 
+  group_by(state) %>% 
+  reframe(lonmin = min(longitude)-0.1, 
+          lonmax = max(longitude)+0.1,
+          latmin = min(latitude)-0.075,
+          latmax = max(latitude)+0.075) %>% 
+  mutate(widest = max(lonmax-lonmin),
+         width = round((lonmax-lonmin)/widest * 6.25, 2),
+         minheight = width * (latmax-latmin)/(lonmax-lonmin))
+```
+
+```{r fig-cell-bathy-NTE}
+#| fig-width: 4
+
+stlims <- lims[lims$state == "NTE", ]
+
+p_bathy <- ggplot(filter(cell_bathy, state == "NTE"), aes(x = longitude, y = latitude, fill = bathy)) +
+  geom_raster() +
+  geom_sf(data = ozmap_data(data = "states"), inherit.aes = F) +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F) +
+  scale_x_continuous(breaks = seq(100, 160, 2.5)) +
+  scale_y_continuous(breaks = seq(-5, -45, -2)) +
+  scale_fill_viridis_c(limits = c(-200, 0), 
+                       breaks = seq(0, -200, -50), labels = c("0", "50", "100", "150", ">200"),
+                       guide = guide_colorbar(
+                         title = "Depth (m)", 
+                         barheight = 1, barwidth = 20,
+                         title.position = "top",
+                         title.hjust = 0.5
+                       )) +
+  labs(x = "Longitude", y = "Latitude") +
+  prettyplot() +
+  theme(legend.position = "top")
+p_bathy
+```
+
+```{r fig-cell-bathy-QLD}
+#| fig-width: 5.5
+#| fig-height: 8
+
+stlims <- lims[lims$state == "QLD", ]
+
+p_bathy %+% filter(cell_bathy, state == "QLD") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F) +
+  scale_x_continuous(breaks = seq(100, 160, 5)) +
+  scale_y_continuous(breaks = seq(-5, -45, -2.5))
+```
+
+```{r fig-cell-bathy-NSW}
+#| fig-width: 3
+#| fig-height: 7
+
+stlims <- lims[lims$state == "NSW", ]
+
+p_bathy %+% filter(cell_bathy, state == "NSW") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F)
+```
+
+```{r fig-cell-bathy-SAU}
+#| fig-width: 4.56
+
+stlims <- lims[lims$state == "SAU", ]
+
+p_bathy %+% filter(cell_bathy, state == "SAU") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F)
+```
+
+```{r fig-cell-bathy-TAS}
+#| fig-width: 3.5
+
+stlims <- lims[lims$state == "TAS", ]
+
+p_bathy %+% filter(cell_bathy, state == "TAS") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F) +
+    scale_x_continuous(breaks = seq(100, 160, 2)) +
+    scale_y_continuous(breaks = seq(-5, -45, -1))
+```
+
+```{r fig-cell-bathy-VIC}
+#| fig-width: 4.5
+
+stlims <- lims[lims$state == "VIC", ]
+
+p_bathy %+% filter(cell_bathy, state == "VIC") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F) +
+    scale_y_continuous(breaks = seq(-5.5, -45, -1))
+```
+
+```{r fig-cell-bathy-WAN}
+#| fig-width: 6.25
+#| fig-height: 10
+
+stlims <- lims[lims$state == "WAN", ]
+
+p_bathy %+% filter(cell_bathy, state == "WAN") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F)
+```
+
+```{r fig-cell-bathy-WAS}
+#| fig-width: 6.25
+#| fig-height: 10
+
+stlims <- lims[lims$state == "WAS", ]
+
+p_bathy %+% filter(cell_bathy, state == "WAS") +
+  coord_sf(xlim = c(stlims$lonmin, stlims$lonmax), ylim = c(stlims$latmin, stlims$latmax), expand = F)
+```
+
+
+# Extra stuff
+
+```{r Ilim-testing}
+#| eval: false
+
+d_top_PL <- c(0.5, 1, 1.5, 2, 2.5, 3) # tar_read(d_top_PL, store = runs_store)
+
+Ilim_cell <- runs_data %>% 
+  list.files(full.names = T) %>% 
+  str_subset("Ilim_cell") %>% 
+  purrr::map_dfr(arrow::read_parquet)
+
+# Ilim_means <- Ilim_cell %>% 
+#   group_by(state, depth, yday) %>% 
+#   reframe(I_lim = mean(I_lim, na.rm = T))
+# 
+# ggplot(Ilim_means, aes(x = yday, y = I_lim, colour = depth)) +
+#   geom_line(linewidth = 0.75) +
+#   facet_wrap(facets = vars(state)) +
+#   theme_classic()
+
+Ilim_means <- Ilim_cell %>% 
+  group_by(state, depth) %>% 
+  reframe(I_sd = sd(I_lim, na.rm = T),
+          I_lim = mean(I_lim, na.rm = T))
+
+ggplot(Ilim_means, aes(x = state, y = I_lim, fill = depth, ymin = I_lim-I_sd, ymax = I_lim+I_sd)) +
+  geom_col(colour = "black", position = position_dodge(), width = 0.95) +
+  geom_errorbar(position = position_dodge(width = 0.95), width = 0.5) +
+  theme_classic()
+```
+
+```{r Ilim_cell-at-single-depth}
+#| eval: false
+
+Ilim_cell <- Ilim_cell %>% 
+  dplyr::filter(depth == "2.5") %>% 
+  dplyr::select(-c(irradiance, depth, state)) %>% 
+  merge(cell_coords, by = "cell_no")
+
+# var_rast <- terra::rast(list(x = Ilim_cell$longitude, y = Ilim_cell$latitude, z = Ilim_cell$I_lim))
+# crs(var_rast) <- "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
+```
+

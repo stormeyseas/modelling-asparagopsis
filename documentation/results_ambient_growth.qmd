@@ -1,0 +1,247 @@
+---
+title: "Results: Ambient growth and bioremediation"
+author: Tormey Reimer
+date: last-modified
+---
+
+```{r setup}
+#| eval: true
+#| include: false
+#| cache: false
+
+# You need quarto to generate this markdown - install here: https://quarto.org/docs/get-started/
+# This markdown uses TinyTex for PDF rendering - install with tinytex::install_tinytex()
+# This markdown uses the acronyms extension - install by entering quarto add rchaput/acronyms@master into the terminal
+
+library(stringr)
+library(units)
+library(targets)
+library(tarchetypes)
+library(macrogrow)
+library(ozmaps)
+library(arrow)
+library(gganimate)
+library(magrittr)
+library(ggplot2)
+library(dplyr)
+library(terra)
+library(tidyterra)
+library(here)
+library(lubridate)
+library(tidyr)
+library(cowplot)
+library(purrr)
+library(patchwork)
+library(conflicted)
+library(gridExtra)
+library(grid)
+
+conflicts_prefer(dplyr::select, dplyr::filter)
+
+source(here("R_scripts/00_functions.R"))
+source(here("R_scripts/00_global_displays.R"))
+```
+
+```{r cell-coords}
+#| eval: true
+#| code-summary: |
+#|   Load in all the BARRA-R2 cells being used, with their coordinates.
+
+cell_coords <- find_read(envi_data, "R2_cell_coords") %>% 
+  mutate(state = factor(state, levels = states_ord)) %>% 
+  dplyr::select(-layer)
+cells_included <- find_read(runs_data, "include")
+cells_omitted <- find_read(runs_data, "omit")
+
+totals <- cell_coords %>% 
+  filter(!cell_no %in% cells_omitted) %>% 
+  group_by(state) %>% 
+  reframe(cells = n())
+```
+
+A total of `r length(cells_omitted[[1]])` were omitted for being too shallow to accommodate the 5.5 m macroalgae canopy, leaving `r length(cells_included[[1]])` cells.
+
+# Growth ends
+
+```{r normal-growth-end-data}
+#| code-summary: |
+#|   Get cell growth in ambient (normal) conditions
+
+norm_growth_end <- file.path(runs_data, "cell_growth_end.parquet") %>% 
+  read_parquet(mmap = T) %>% 
+  merge(cell_coords, by = "cell_no")
+
+# Total N removed at each harvest
+norm_growth_end <- norm_growth_end %>% 
+  mutate(
+    value = TN_end - TN_start,
+    value = case_when(value == 0 ~ NA, T ~ value),
+    month = as.factor(month(parse_date_time(start, orders = "j"))),
+    species = factor(species, levels = c("armata", "taxiformis"), labels = c("A. armata", "A. taxiformis"))
+  )
+
+norm_growth_total <- norm_growth_end %>% 
+  mutate(
+    value_na = case_when(value <= 0 ~ NA, T ~ value),
+    value_0s = case_when(value <= 0 ~ 0, T ~ value)
+  ) %>% 
+  group_by(state, species, cell_no, latitude, longitude) %>% 
+  reframe(
+    total = sumna(value),            # good growth months may be outweighed by bad growth months
+    total_na = sumna(value_na),      # bad growth months are removed
+    total_na = case_when(total_na == 0 ~ NA, T ~ total_na),
+    total_0s = sumna(value_0s)       # bad growth months count as zeros
+  )
+```
+
+```{r total-means}
+# Mean per each state/month
+df_arma_mon <- norm_growth_end %>% 
+  filter(species == "A. armata") %>% 
+  group_by(species, state, month) %>% 
+  reframe(
+    mean = meanna(value) %>% set_units("mg m-2"),
+    sd = sdna(value) %>% set_units("mg m-2")
+  ) %>% 
+  arrange(-mean)
+
+df_taxi_month <- norm_growth_end %>% 
+  filter(species != "A. armata") %>% 
+  group_by(species, state, month) %>% 
+  reframe(
+    mean = meanna(value) %>% set_units("mg m-2"),
+    sd = sdna(value) %>% set_units("mg m-2")
+  ) %>% 
+  arrange(-mean)
+
+# Mean across all months in the year per state
+df_arma_year <- norm_growth_end %>% 
+  filter(species == "A. armata") %>% 
+  group_by(species, state) %>% 
+  reframe(
+    mean = meanna(value) %>% set_units("mg m-2"),
+    sd = sdna(value) %>% set_units("mg m-2"),
+    max = maxna(value) %>% set_units("mg m-2")
+  ) %>% 
+  arrange(-mean)
+
+df_taxi_year <- norm_growth_end %>% 
+  filter(species != "A. armata") %>% 
+  group_by(species, state) %>% 
+  reframe(
+    mean = meanna(value) %>% set_units("mg m-2"),
+    sd = sdna(value) %>% set_units("mg m-2"),
+    max = maxna(value) %>% set_units("mg m-2")
+  ) %>% 
+  arrange(-mean)
+
+# Total across the year for each state (mean of each month summed)
+df_arma_alltotal <- df_arma_mon %>% 
+  group_by(species, state) %>% 
+  reframe(total = sum(mean)) %>% 
+  arrange(-total)
+
+df_taxi_alltotal <- df_taxi_month %>% 
+  group_by(species, state) %>% 
+  reframe(total = sum(mean)) %>% 
+  arrange(-total)
+```
+
+```{r fig-cell-growth-end}
+norm_growth_end %>%
+  mutate(value = case_when(value <= 0 ~ 0, T ~ value)) %>% 
+  group_by(species, state, start) %>%
+  reframe(
+    mean = meanna(value),
+    sd = sdna(value)
+  ) %>%
+  mutate(
+    sd = case_when(sd > mean ~ mean, T ~ sd),
+    state = factor(state, levels = states_ord, labels = states_lng)
+  ) %>%
+  ggplot(
+    aes(
+      x = start, y = mean, ymin = mean - sd, ymax = mean + sd,
+      color = state, fill = state, linetype = species
+    )
+  ) +
+  geom_line(linewidth = 0.75) +
+  geom_ribbon(alpha = 0.25, linewidth = 0.25) +
+  facet_wrap(facets = vars(state), ncol = 2) +
+  # scale_y_continuous(breaks = seq(0, 150, 25), limits = c(0, 175), expand = c(0,0)) +
+  scale_color_manual(values = states_pal) +
+  scale_fill_manual(values = states_pal) +
+  env_plot() +
+  labs(x = "Day of the year", y = expression("Total N removed (mg m"^-2 *")"))
+```
+
+```{r total-removed}
+#| eval: false
+#| code-summary: |
+#|   Total nitrogen removed
+
+rem_diff_total <- supplement_change %>% 
+  select(-contains("success")) %>% 
+  mutate(
+    norm_rem = case_when(norm_rem <= 0 ~ NA, T ~ norm_rem),
+    supp_rem = case_when(supp_rem <= 0 ~ NA, T ~ supp_rem),
+    rem_diff = supp_rem - norm_rem
+  )
+
+# Show difference in nitrogen removed per month (all cells)
+rem_diff_total %>%
+  group_by(species, month) %>% 
+  reframe(
+    norm_rem = sumna(norm_rem),
+    supp_rem = sumna(supp_rem),
+    rem_diff = sumna(rem_diff)/norm_rem,
+    perc_rem_diff = 100*rem_diff
+  )
+
+# Show difference in nitrogen removed (overall)
+supplement_change_total %>%
+  mutate(
+    rem_diff = supp_total_0s-norm_total_0s,
+    rem_diff = case_when(rem_diff <= 0 ~ NA, T ~ rem_diff)
+  ) %>% 
+  group_by(species) %>% 
+  reframe(
+    rem_diff = sumna(rem_diff),
+    rem_diff_kg = rem_diff %>% set_units("mg") %>% set_units("kg"),
+    norm_total_na = sumna(norm_total_na),
+    supp_total_na = sumna(supp_total_na),
+    prop_rem_diff = rem_diff/norm_total_na,
+    perc_rem_diff = 100*prop_rem_diff
+  )
+```
+
+```{r fig-supp-growth-end-map-totals}
+#| fig-cap: Total nitrogen removed by _A. armata_ (top) and _A. taxiformis (bottom) across the entire year under ambient conditions.
+
+minna(norm_growth_total$total_na)
+maxna(norm_growth_total$total_na)
+
+norm_growth_total %>%
+  ggplot(aes(x = longitude, y = latitude, fill = total_na)) +
+  geom_tile() +
+  geom_sf(data = ozmap_data(data = "states"), inherit.aes = F) +
+  coord_sf(xlim = c(111.5, 155), ylim = c(-44.5, -8.5), expand = F) +
+  scale_x_continuous(breaks = seq(100, 160, 10)) +
+  scale_y_continuous(breaks = seq(-2.5, -45, -5)) +
+  scale_fill_viridis_c(
+    limits = c(0, maxna(norm_growth_total$total_na)),
+    breaks = seq(0, 2250, 500),
+    na.value = "grey",
+    guide = guide_colorbar(
+      title = expression("Total N removed (mg m"^-2 * ")"),
+      barheight = 1,
+      barwidth = 20,
+      title.position = "top",
+      title.hjust = 0.5
+    )
+  ) +
+  labs(x = "Longitude", y = "Latitude") +
+  prettyplot() +
+  theme(legend.position = "top", strip.text = element_blank(), strip.background = element_blank()) +
+  facet_grid(rows = vars(species))
+```

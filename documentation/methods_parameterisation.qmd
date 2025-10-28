@@ -1,0 +1,311 @@
+---
+title: "Methods: Species parameterisation"
+author: Tormey Reimer
+date: last-modified
+---
+
+```{r setup}
+#| eval: true
+#| include: false
+#| cache: false
+
+# You need quarto to generate this markdown - install here: https://quarto.org/docs/get-started/
+# This markdown uses TinyTex for PDF rendering - install with tinytex::install_tinytex()
+# This markdown uses the acronyms extension - install by entering quarto add rchaput/acronyms@master into the terminal
+
+library(stringr)
+library(units)
+library(targets)
+library(tarchetypes)
+library(macrogrow)
+library(ozmaps)
+library(arrow)
+library(gganimate)
+library(magrittr)
+library(ggplot2)
+library(dplyr)
+library(terra)
+library(tidyterra)
+library(here)
+library(lubridate)
+library(tidyr)
+library(cowplot)
+library(purrr)
+library(patchwork)
+library(conflicted)
+library(gridExtra)
+library(grid)
+
+conflicts_prefer(dplyr::select, dplyr::filter)
+
+source(here("R_scripts/00_functions.R"))
+source(here("R_scripts/00_global_displays.R"))
+```
+
+## Sensitivity conditions
+
+```{r sens-conditions}
+#| eval: true
+
+culture_depths <- tar_read(culture_depths, store = spec_store)
+factors <- tar_read(factors, store = spec_store)
+
+state_input_timeseries <- envi_data %>% 
+  list.files(full.names = T) %>% 
+  str_subset("state_input_timeseries") %>% 
+  purrr::map_dfr(arrow::read_parquet) %>% 
+  filter(yday <= 365)
+
+sens_cond <- file.path(spec_data, "sensitivity_conditions.parquet") %>% 
+  arrow::read_parquet()
+```
+
+Culture depths tested were `r culture_depths` m below the surface, with a 
+
+Sensitivity runs started on the first of every month to cover annual variability, for 12 runs per year, with the same mean annual conditions looping from December to January. Sensitivity runs were conducted at culture depths of 0.5 m, 2 m, 3.5 m, and 5 m below the surface with a light attenuation coefficient of 0.65 (clear water). The canopy was always 2.5 m in height, and the total water column depth was always 50 m.
+Curves for temperature, surface irradiance, salinity, water velocity, nitrate and ammonium were constructed to capture “typical” conditions based on daily means of each state from 2019-2023. This resulted in two sensitivity curves for temperature and a single sensitivity curve for irradiance, water velocity, salinity, nitrate and ammonium (fig-sens-altogether). 
+
+```{r fig-sens-altogether}
+#| eval: true
+#| fig-cap: |
+#|   Average temperatures in each state region (left, see Figure 2 for detail) and the two temperature curves used for sensitivity analysis (high and low, right).
+
+prettyplot2 <- prettyplot + theme(legend.position = "none", aspect.ratio = 0.75)
+rm.x <- function(){theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank())}
+rm.y <- function(){theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.title.y = element_blank())}
+
+p1 <- sens_cond %>% 
+  dplyr::filter(t <= 365) %>% 
+  ggplot(aes(x = t, y = T_input, linetype = as.factor(T_level))) +
+  geom_line(linewidth = 0.75) +
+  geom_line(data = state_input_timeseries, aes(x = yday, y = T_input_mean, colour = state), linetype = "dotted", inherit.aes = F) +
+  scale_y_continuous(breaks = seq(10, 35, 5), limits = c(10, 33.5)) +
+  labs(y = expression("Temperature ("*degree*"C)")) +
+  prettyplot2
+
+p2 <- sens_cond %>% 
+  dplyr::filter(t <= 365 & T_level == 1) %>% 
+  ggplot(aes(x = t, y = I_input)) +
+  geom_line(linewidth = 0.75) +
+  geom_line(data = state_input_timeseries, aes(x = yday, y = I_input_mean, colour = state), linetype = "dotted", inherit.aes = F) +
+  scale_y_continuous(breaks = seq(0, 700, 100), limits = c(0, 660)) +
+  labs(y = expression("Irradiance ("*mu*"mol m"^-2*" s"^-1*")")) +
+  prettyplot2
+
+p3 <- sens_cond %>% 
+  dplyr::filter(t <= 365 & T_level == 1) %>% 
+  ggplot(aes(x = t, y = U_input)) +
+  geom_line(linewidth = 0.75) +
+  geom_line(data = state_input_timeseries, aes(x = yday, y = UV_input_mean, colour = state), linetype = "dotted", inherit.aes = F) +
+  scale_y_continuous(breaks = seq(0, 0.6, 0.1), limits = c(0, 0.575)) +
+  labs(y = expression("Water velocity (m"^-1*" s"^-1*")")) +
+  prettyplot2
+
+p4 <- sens_cond %>% 
+  dplyr::filter(t <= 365 & T_level == 1) %>% 
+  ggplot(aes(x = t, y = S_input)) +
+  geom_line(linewidth = 0.75) +
+  geom_line(data = state_input_timeseries, aes(x = yday, y = S_input_mean, colour = state), linetype = "dotted", inherit.aes = F) +
+  scale_y_continuous(breaks = seq(33.1, 36.8, 0.3), limits = c(34, 36.11)) +
+  labs(y = expression("Salinity (g L"^-1*")")) +
+  prettyplot2
+
+pdata1 <- sens_cond %>% 
+  dplyr::filter(t <= 365 & T_level == 1) %>% 
+  mutate(Ni_input = set_units(Ni_input, "mg m-3") %>% set_units("umol L-1") %>% drop_units(),
+         Am_input = set_units(Am_input, "mg m-3") %>% set_units("umol L-1") %>% drop_units())
+pdata2 <- state_input_timeseries %>% 
+  mutate(Ni_input_mean = set_units(Ni_input_mean, "mg m-3") %>% set_units("umol L-1") %>% drop_units(),
+         Am_input_mean = set_units(Am_input_mean, "mg m-3") %>% set_units("umol L-1") %>% drop_units())
+
+p5 <- pdata1 %>% 
+  ggplot(aes(x = t, y = Ni_input)) +
+  geom_line(linewidth = 0.75) +
+  geom_line(data = pdata2, aes(x = yday, y = Ni_input_mean, colour = state), linetype = "dotted", inherit.aes = F) +
+  scale_y_continuous(breaks = seq(0, 5, 0.5), limits = c(0, 3)) +
+  labs(y = nitrate_lab) +
+  prettyplot2
+
+p6 <- pdata1 %>% 
+  ggplot(aes(x = t, y = Am_input)) +
+  geom_line(linewidth = 0.75) +
+  geom_line(data = pdata2, aes(x = yday, y = Am_input_mean, colour = state), linetype = "dotted", inherit.aes = F) +
+  scale_y_continuous(breaks = seq(0, 10, 0.1), limits = c(0, 0.5)) +
+  labs(y = ammonium_lab) +
+  prettyplot2
+
+plot_grid(
+  plot_grid(
+    p1 + rm.x() + annotate("text", x = Inf, y = Inf, label = "A", hjust = 1.5, vjust = 1, size = 4, fontface = "plain"), 
+    p2 + rm.x() + annotate("text", x = Inf, y = Inf, label = "B", hjust = 1.5, vjust = 1, size = 4, fontface = "plain"),  
+    p3 + rm.x() + annotate("text", x = Inf, y = Inf, label = "C", hjust = 1.5, vjust = 1, size = 4, fontface = "plain"), 
+    p4 + rm.x() + annotate("text", x = Inf, y = Inf, label = "D", hjust = 1.5, vjust = 1, size = 4, fontface = "plain"), 
+    p5 + theme(axis.title.x = element_blank()) + 
+      annotate("text", x = Inf, y = Inf, label = "E", hjust = 1.5, vjust = 1, size = 4, fontface = "plain"),  
+    p6 + theme(axis.title.x = element_blank()) + 
+      annotate("text", x = Inf, y = Inf, label = "F", hjust = 1.5, vjust = 1, size = 4, fontface = "plain"), 
+    ncol = 2, align = "hv"
+  ),
+  ggdraw() + draw_label("Day of the year", size = 12),
+  ncol = 1,
+  rel_heights = c(0.95, 0.05)
+)
+```
+
+# All parameterisation responses
+
+```{r fig-all-responses}
+#| eval: true
+#| fig-cap: |
+#|   all responses
+
+N_uptake <- file.path(spec_data, "N_uptake.parquet") %>% 
+  read_parquet()
+S_response <- file.path(spec_data, "S_response.parquet") %>% 
+  read_parquet()
+I_response <- file.path(spec_data, "I_response.parquet") %>% 
+  read_parquet() %>% 
+  mutate(depth_m = as.factor(depth_m))
+T_response <- file.path(spec_data, "T_response.parquet") %>% 
+  read_parquet() %>% 
+  mutate(species = factor(species, 
+                          levels = c("taxiformis", "armata"), 
+                          labels = c("taxi", "arma")))
+
+p1 <- ggplot(N_uptake, aes(x = uM, y = uptake_uM, linetype = form)) +
+  geom_line(linewidth = 0.75) +
+  labs(x = expression("Ambient concentration ("*mu*"M)"), y = expression("Uptake rate ("*mu*"mol gDW"^-1*"d"^-1*")")) +
+  scale_y_continuous(breaks = seq(0, 3.5, 0.05), limits = c(0, 0.30)) +
+  scale_x_continuous(breaks = seq(0, 30, 5), limits = c(0,25)) +
+  prettyplot() + 
+  theme(aspect.ratio = 0.75)
+
+p2 <- ggplot(T_response, aes(x = temp, y = Tlim, color = species)) +
+  geom_line(linewidth = 0.75) +
+  labs(x = expression("Temperature ("*degree*"C)"), y = "Relative growth") +
+  scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0,1)) +
+  scale_x_continuous(breaks = seq(0, 40, 5), limits = c(0,35)) +
+  prettyplot() + 
+  theme(aspect.ratio = 0.75)
+
+p3 <- ggplot(I_response, aes(x = light, y = Ilim, linetype = as.factor(depth_m))) +
+  geom_line(linewidth = 0.75) +
+  facet_wrap(facets = vars(species)) +
+  labs(x = expression("Surface light (PPFD)"), y = "Relative growth") +
+  scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0,1)) +
+  scale_linetype_manual(values = c("solid", "dashed", "dotdash", "dotted")) +
+  prettyplot() + 
+  theme(aspect.ratio = 0.75, strip.text = element_blank())
+
+p4 <- ggplot(S_response, aes(x = sali, y = Slim)) +
+  geom_line(linewidth = 0.75) +
+  labs(x = expression("Salinity (g L"^-1*")"), y = "Relative growth") +
+  scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0,1)) +
+  scale_x_continuous(breaks = seq(0, 60, 5), limits = c(19,45)) +
+  prettyplot() + 
+  theme(aspect.ratio = 0.75)
+
+p1 <- p1 + annotate("text", x = Inf, y = Inf, label = "A", hjust = 1.5, vjust = 1.5, size = 4)
+p2 <- p2 + annotate("text", x = Inf, y = Inf, label = "B", hjust = 1.5, vjust = 1.5, size = 4)
+p3 <- p3 + annotate("text", x = Inf, y = Inf, label = "C", hjust = 1.5, vjust = 1.5, size = 4)
+p4 <- p4 + annotate("text", x = Inf, y = Inf, label = "D", hjust = 1.5, vjust = 1.5, size = 4)
+
+plot_grid(
+  plot_grid(p1, p2, p3, p4, ncol = 2, align = "hv"),
+  ncol = 1,
+  rel_heights = c(0.95, 0.05)  # Adjust these values to control spacing
+)
+```
+
+# Parameter sensitivity
+
+```{r sensitivity data}
+sens_arma <- file.path(spec_data, "sensitivity_arma_calc_combTU.parquet") %>% 
+  read_parquet() %>% 
+  dplyr::filter(!param %in% c("M_am", "C_am", "M_ot", "C_ot")) %>% 
+  mutate(cult_dep = as.factor(cult_dep))
+exlude <- unique(sens_arma$param[abs(sens_arma$sens) < 0.01]) %>% as.character
+sens_arma <- sens_arma %>% 
+  dplyr::filter(!param %in% c(exlude, "M_am", "C_am", "M_ot", "C_ot"))
+sens_arma$param <- droplevels(sens_arma$param)
+
+levels(sens_arma$param)
+exlude
+
+# Add axis labels
+param.labs.arma <- c(
+  bquote("V"["Am"]), 
+  bquote("K"["Am"]),
+  # bquote("M"["Ni"]),
+  bquote("C"["Ni"]), 
+  bquote("Q"["min"]), 
+  bquote("Q"["max"]),
+  # bquote("K"["c"]),
+  bquote(mu), 
+  bquote("D"["ve"]),
+  # bquote("a"["cs"]), 
+  # bquote("I"["o"]),
+  bquote("T"["opt"]), 
+  bquote("T"["min"]), 
+  bquote("T"["max"])
+  # bquote("S"["opt"]), 
+  # bquote("S"["min"]), 
+  # bquote("S"["max"]), 
+  # bquote("h"["a"]), 
+  # bquote("h"["b"]), 
+  # bquote("h"["c"]), 
+  # bquote("h"["max"]), 
+  # "DW:WW"
+)
+
+sens_taxi <- file.path(spec_data, "sensitivity_taxi_calc_combTU.parquet") %>% 
+  read_parquet() %>% 
+  mutate(cult_dep = as.factor(cult_dep))
+exlude <- unique(sens_taxi$param[abs(sens_taxi$sens) < 0.01]) %>% as.character
+sens_taxi <- sens_taxi %>% 
+  dplyr::filter(!param %in% c(exlude, "M_am", "C_am", "M_ot", "C_ot"))
+sens_taxi$param <- droplevels(sens_taxi$param)
+
+levels(sens_taxi$param)
+exlude
+
+# Add axis labels
+param.labs.taxi <- param.labs.arma
+```
+
+```{r fig-sensitivity-plot}
+#| fig-height: 8
+#| fig-cap: |
+#|   Relative impact of increasing each model parameter for _Asparagopsis armata_ (A) and _Asparagopsis taxiformis_ (B) by 10% on total N removed. Colours show the different culture depths of 0.5 m (orange), 2.5 m (blue), and 5 m (green) below the surface. Error bars show variability (SD) across the 12 months of a typical year in each state. 
+
+p1 <- ggplot(dplyr::filter(sens_arma, !is.na(sens) & cult_dep != "10"), 
+       aes(x = rev(param), y = sens, fill = as.factor(cult_dep), ymin = sens-sd, ymax = sens+sd), 
+       alpha = 0.75) +
+  geom_col(position = position_dodge(), width = 0.95, colour = "black") +
+  geom_errorbar(position = position_dodge(width = 0.95), width = 0.5) +
+  coord_flip() +
+  scale_y_continuous(limits = c(-1.1, 1.1), breaks = seq(-1.5, 1.5, 0.2)) +
+  scale_x_discrete(limits = levels(sens_arma$param), labels = rev(param.labs.arma)) +
+  scale_fill_manual(values = depths_pal) +
+  labs(y = "Total N sensitivity", x = "Parameter name") +
+  prettyplot() +
+  theme(axis.title.x = element_blank(), 
+        axis.text.x = element_blank(), 
+        axis.ticks.x = element_blank(),
+        aspect.ratio = 0.75)
+
+p2 <- ggplot(dplyr::filter(sens_taxi, !is.na(sens) & cult_dep != "10"), 
+       aes(x = rev(param), y = sens, fill = as.factor(cult_dep), ymin = sens-sd, ymax = sens+sd), 
+       alpha = 0.75) +
+  geom_col(position = position_dodge(), width = 0.95, colour = "black") +
+  geom_errorbar(position = position_dodge(width = 0.95), width = 0.5) +
+  coord_flip() +
+  scale_y_continuous(limits = c(-1.1, 1.1), breaks = seq(-1.5, 1.5, 0.2)) +
+  scale_x_discrete(limits = levels(sens_arma$param), labels = rev(param.labs.taxi)) +
+  scale_fill_manual(values = depths_pal) +
+  labs(y = "Total N sensitivity", x = "Parameter name") +
+  prettyplot() + 
+  theme(aspect.ratio = 0.75)
+
+plot_grid(p1, p2, nrow = 2, align = "hv")
+```

@@ -1,0 +1,39 @@
+project:
+  type: default
+  output-dir: rendered-html-docs
+  render: 
+    - documentation/methods_environmental_conditions.qmd
+    - documentation/methods_parameterisation.qmd
+    - documentation/results_ambient_growth.qmd
+    - documentation/results_ambient_growth_lims.qmd
+    - documentation/results_supplemented_growth.qmd
+
+format:
+  html:
+    theme: simplex
+    css: ["extra.css"]
+    embed-resources: true
+    code-fold: true
+    code-overflow: wrap
+    toc: true
+    toc-expand: true
+    toc-location: left
+    toc-depth: 4
+    lang: en-GB
+    grid:
+      sidebar-width: 300px
+      body-width: 1250px
+      margin-width: 200px
+      gutter-width: 2em
+        
+execute:
+  eval: true
+  cache: true # quarto render .\documentation\ --cache-refresh
+
+bibliography: ["refs.bib", "manual-refs.bib"]
+
+knitr: 
+  opts_chunk:
+    fig.align: center
+    fig.height: 8
+    fig.width: 7

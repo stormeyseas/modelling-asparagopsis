@@ -1,0 +1,481 @@
+---
+title: "Results: Supplemented growth and bioremediation"
+author: Tormey Reimer
+date: last-modified
+---
+
+```{r setup}
+#| eval: true
+#| include: false
+#| cache: false
+
+# You need quarto to generate this markdown - install here: https://quarto.org/docs/get-started/
+# This markdown uses TinyTex for PDF rendering - install with tinytex::install_tinytex()
+# This markdown uses the acronyms extension - install by entering quarto add rchaput/acronyms@master into the terminal
+
+library(stringr)
+library(units)
+library(targets)
+library(tarchetypes)
+library(macrogrow)
+library(ozmaps)
+library(arrow)
+library(gganimate)
+library(magrittr)
+library(ggplot2)
+library(dplyr)
+library(terra)
+library(tidyterra)
+library(here)
+library(lubridate)
+library(tidyr)
+library(cowplot)
+library(purrr)
+library(patchwork)
+library(conflicted)
+library(gridExtra)
+library(grid)
+
+conflicts_prefer(dplyr::select, dplyr::filter)
+
+source(here("R_scripts/00_functions.R"))
+source(here("R_scripts/00_global_displays.R"))
+```
+
+```{r cell-coords}
+#| eval: true
+#| code-summary: |
+#|   Load in all the BARRA-R2 cells being used, with their coordinates.
+
+cell_coords <- find_read(envi_data, "R2_cell_coords") %>% 
+  mutate(state = factor(state, levels = states_ord)) %>% 
+  dplyr::select(-layer)
+cells_included <- find_read(runs_data, "include")
+cells_omitted <- find_read(runs_data, "omit")
+
+totals <- cell_coords %>% 
+  filter(!cell_no %in% cells_omitted) %>% 
+  group_by(state) %>% 
+  reframe(cells = n())
+```
+
+```{r normal-growth-end-data}
+#| code-summary: |
+#|   Get cell growth in ambient (normal) conditions
+
+norm_growth_end <- file.path(runs_data, "cell_growth_end.parquet") %>% 
+  read_parquet(mmap = T) %>% 
+  merge(cell_coords, by = "cell_no")
+
+# Total N removed at each harvest
+norm_growth_end <- norm_growth_end %>% 
+  mutate(
+    value = TN_end - TN_start,
+    value = case_when(value == 0 ~ NA, T ~ value),
+    month = as.factor(month(parse_date_time(start, orders = "j"))),
+    species = factor(species, levels = c("armata", "taxiformis"), labels = c("A. armata", "A. taxiformis"))
+  )
+
+norm_growth_total <- norm_growth_end %>% 
+  mutate(
+    value_na = case_when(value <= 0 ~ NA, T ~ value),
+    value_0s = case_when(value <= 0 ~ 0, T ~ value)
+  ) %>% 
+  group_by(state, species, cell_no, latitude, longitude) %>% 
+  reframe(
+    total = sumna(value),            # good growth months may be outweighed by bad growth months
+    total_na = sumna(value_na),      # bad growth months are removed
+    total_na = case_when(total_na == 0 ~ NA, T ~ total_na),
+    total_0s = sumna(value_0s)       # bad growth months count as zeros
+  )
+```
+
+```{r supp-growth-end-data}
+#| code-summary: |
+#|   Get cell growth in nitrogen supplemented conditions
+
+supp_growth_end_raw <- file.path(runs_data, "cell_growth_supp_end.parquet") %>% 
+  read_parquet(mmap = T) %>% 
+  merge(cell_coords, by = "cell_no")
+
+supp_growth_end <- supp_growth_end_raw %>% 
+  mutate(
+    value = TN_end - TN_start,
+    value = case_when(value == 0 ~ NA, T ~ value),
+    month = as.factor(month(parse_date_time(start, orders = "j"))),
+    species = factor(species, levels = c("armata", "taxiformis"), labels = c("A. armata", "A. taxiformis"))
+  )
+
+supp_growth_total <- supp_growth_end %>% 
+  mutate(
+    value_na = case_when(value <= 0 ~ NA, T ~ value),
+    value_0s = case_when(value <= 0 ~ 0, T ~ value)
+  ) %>% 
+  group_by(state, species, cell_no, latitude, longitude) %>% 
+  reframe(
+    total = sumna(value),            # good growth months may be outweighed by bad growth months
+    total_na = sumna(value_na),      # bad growth months are removed
+    total_na = case_when(total_na == 0 ~ NA, T ~ total_na),
+    total_0s = sumna(value_0s)       # bad growth months count as zeros
+  )
+```
+
+```{r all-growth-end-data}
+#| code-summary: |
+#|   Join them together for comparison
+
+supplement_change <- left_join(
+  norm_growth_end %>% 
+    select(-c("TN_start", "TN_end", "start", "value")) %>% 
+    rename(norm_success = success, norm_rem = TN_rem), 
+  supp_growth_end %>% 
+    select(-c("TN_start", "TN_end", "start", "value")) %>% 
+    rename(supp_success = success, supp_rem = TN_rem), 
+  by = c("state", "cell_no", "longitude", "latitude", "species", "month")
+) %>% 
+  relocate(state, .before = cell_no) %>% 
+  relocate(species, .before = state) %>% 
+  relocate(longitude, .after = cell_no) %>% 
+  relocate(latitude, .after = longitude) %>% 
+  relocate(month, .after = latitude)
+
+supplement_change_total <- left_join(
+  norm_growth_total %>% 
+    rename(norm_total = total, norm_total_na = total_na, norm_total_0s = total_0s), 
+  supp_growth_total %>% 
+    rename(supp_total = total, supp_total_na = total_na, supp_total_0s = total_0s), 
+  by = c("state", "cell_no", "longitude", "latitude", "species")
+)
+```
+
+# Supplemented success change
+
+Provide summaries of the changes in success (ie whether the modelled seaweed was able to successfully growth at all within a cell) between normal and supplemented growth.
+
+```{r supp-growth-success-change-1}
+#| code-summary: |
+#|   How many/what proportion of cells became successful in each month (and overall) because of supplementation
+
+# Which cells changed in success (per month)
+norm_success <- supplement_change %>% 
+  filter(norm_success) %>% 
+  group_by(species, month) %>% 
+  reframe(
+    norm_success_cells = n(),
+    perc_total_cells = 100*n()/11748
+  )
+success_change <- supplement_change %>% 
+  filter(supp_success != norm_success) %>% 
+  group_by(species, month) %>% 
+  reframe(success_change_cells = n())
+
+norm_success %>% 
+  left_join(success_change, by = c("species", "month")) %>% 
+  mutate(
+    percdiff_normal_change = 100*success_change_cells/norm_success_cells,
+    perc_total_change = 100*success_change_cells/11748
+  ) %>% 
+  select(-norm_success_cells, -success_change_cells) %>% 
+  print(n = 24)
+
+# Which cells changed in success (overall)
+norm_success <- supplement_change %>% 
+  filter(norm_success) %>% 
+  group_by(species) %>% 
+  reframe(
+    norm_success_cells = n(),
+    perc_total_cells = 100*n()/(12*11748)
+  )
+success_change <- supplement_change %>% 
+  filter(supp_success != norm_success) %>% 
+  group_by(species) %>% 
+  reframe(success_change_cells = n())
+
+norm_success %>% 
+  left_join(success_change, by = c("species")) %>% 
+  mutate(
+    percdiff_normal_ch = 100*success_change_cells/norm_success_cells,
+    perc_total_ch = 100*success_change_cells/(11748*12)
+  ) %>% 
+  select(-norm_success_cells, -success_change_cells)
+```
+
+```{r area-success-change}
+#| eval: false
+
+library(terra)
+
+rdata_norm <- norm_growth_end %>% 
+  select(cell_no, species, success, longitude, latitude, month) %>% 
+  group_by(species, cell_no, longitude, latitude) %>% 
+  reframe(
+    success = as.numeric(any(success)),
+    success = case_when(success == 0 ~ NA, T ~ 1)
+  ) %>% 
+  filter(species != "A. armata")
+
+rdata_supp <- supp_growth_end %>% 
+  select(cell_no, species, success, longitude, latitude, month) %>% 
+  group_by(species, cell_no, longitude, latitude) %>% 
+  reframe(
+    success = as.numeric(any(success)),
+    success = case_when(success == 0 ~ NA, T ~ 1)
+  ) %>% 
+  filter(species != "A. armata")
+
+r_template <- rast(
+  extent = ext(c(min(rdata_norm$longitude), max(rdata_norm$longitude), 
+                 min(rdata_norm$latitude), max(rdata_norm$latitude))), 
+  resolution = 0.12
+)
+
+r <- rasterize(rdata_norm[, c("longitude", "latitude")], r_template, values = rdata_norm$success)
+r_area <- cellSize(r, unit = "km")
+r_area <- mask(r_area, r)
+area_norm_success <- global(r_area, fun = sumna)[[1]]
+
+r <- rasterize(rdata_supp[, c("longitude", "latitude")], r_template, values = rdata_supp$success)
+r_area <- cellSize(r, unit = "km")
+r_area <- mask(r_area, r)
+area_supp_success <- global(r_area, fun = sumna)[[1]]
+
+area_supp_success-area_norm_success
+100*(area_supp_success-area_norm_success)/area_norm_success
+```
+
+```{r supp-growth-success-change-2}
+#| fig-height: 7
+#| code-summary: |
+#|   Find out where cells changed from failure to success under supplemented conditions
+
+supplement_change %>% 
+  mutate(success_change = case_when(supp_success != norm_success ~ T, T ~ F)) %>% 
+  filter(success_change & species == "A. armata") %>% 
+  ggplot(aes(x = longitude, y = latitude, fill = success_change)) +
+  geom_tile() +
+  geom_sf(data = ozmap_data(data = "states"), inherit.aes = F) +
+  coord_sf(
+    xlim = c(111.5, 155),
+    ylim = c(-44.5, -8.5),
+    expand = F
+  ) +
+  theme_void() + theme(legend.position = "none") +
+  facet_wrap(facets = vars(month), nrow = 3) +
+  ggtitle("Cells where A. armata became successful in each month under supplementation")
+
+supplement_change %>% 
+  mutate(success_change = case_when(supp_success != norm_success ~ T, T ~ F)) %>% 
+  filter(success_change & species == "A. taxiformis") %>% 
+  ggplot(aes(x = longitude, y = latitude, fill = success_change)) +
+  geom_tile() +
+  geom_sf(data = ozmap_data(data = "states"), inherit.aes = F) +
+  coord_sf(
+    xlim = c(111.5, 155),
+    ylim = c(-44.5, -8.5),
+    expand = F
+  ) +
+  theme_void() + theme(legend.position = "none") +
+  facet_wrap(facets = vars(month), nrow = 3) +
+  ggtitle("Cells where A. taxiformis became successful in each month under supplementation")
+```
+
+# Supplemented nitrogen removal 
+
+```{r total-removed-with-supplementation}
+#| code-summary: |
+#|   Differences in nitrogen removed because of supplementation
+
+rem_diff_total <- supplement_change %>% 
+  select(-contains("success")) %>% 
+  mutate(
+    norm_rem = case_when(norm_rem <= 0 ~ NA, T ~ norm_rem),
+    supp_rem = case_when(supp_rem <= 0 ~ NA, T ~ supp_rem),
+    rem_diff = supp_rem - norm_rem
+  )
+
+# Show difference in nitrogen removed per month (all cells)
+rem_diff_total %>%
+  group_by(species, month) %>% 
+  reframe(
+    norm_rem = sumna(norm_rem),
+    supp_rem = sumna(supp_rem),
+    rem_diff = sumna(rem_diff)/norm_rem,
+    perc_rem_diff = 100*rem_diff
+  ) %>% 
+  print(n = 24)
+
+# Show difference in nitrogen removed (overall)
+supplement_change_total %>%
+  mutate(
+    rem_diff = supp_total_0s-norm_total_0s,
+    rem_diff = case_when(rem_diff <= 0 ~ NA, T ~ rem_diff)
+  ) %>% 
+  group_by(species) %>% 
+  reframe(
+    rem_diff = sumna(rem_diff),
+    rem_diff_kg = rem_diff %>% set_units("mg") %>% set_units("kg"),
+    norm_total_na = sumna(norm_total_na),
+    supp_total_na = sumna(supp_total_na),
+    prop_rem_diff = rem_diff/norm_total_na,
+    perc_rem_diff = 100*prop_rem_diff
+  )
+```
+
+```{r fig-supp-growth-end-map-totals}
+#| fig-cap: Total nitrogen removed by _A. armata_ (top) and _A. taxiformis (bottom) across the entire year under supplemented conditions.
+
+supp_growth_total %>%
+  ggplot(aes(x = longitude, y = latitude, fill = total_na)) +
+  geom_tile() +
+  geom_sf(data = ozmap_data(data = "states"), inherit.aes = F) +
+  coord_sf(xlim = c(111.5, 155), ylim = c(-44.5, -8.5), expand = F) +
+  scale_x_continuous(breaks = seq(100, 160, 10)) +
+  scale_y_continuous(breaks = seq(-2.5, -45, -5)) +
+  scale_fill_viridis_c(
+    limits = c(0, 10000),
+    breaks = seq(0, 10000, 1500),
+    na.value = "grey",
+    guide = guide_colorbar(
+      title = expression("Total N removed (mg m"^-2 * ")"),
+      barheight = 1,
+      barwidth = 20,
+      title.position = "top",
+      title.hjust = 0.5
+    )
+  ) +
+  labs(x = "Longitude", y = "Latitude") +
+  prettyplot() +
+  theme(legend.position = "top", strip.text = element_blank(), strip.background = element_blank()) +
+  facet_grid(rows = vars(species))
+```
+
+## Comparing normal and supplemented removal
+
+```{r compare-growth-map-armata}
+#| fig-cap: Total nitrogen removed by _A. armata_ (top) and _A. taxiformis (bottom) across the entire year under normal conditions (left) and supplemented conditions (right).
+
+all_growth_total <- rbind(
+  norm_growth_total %>% mutate(scenario = "norm_conditions"),
+  supp_growth_total %>% mutate(scenario = "supp_conditions")
+)
+
+# hist(all_growth_total$total_na[all_growth_total$scenario == "norm_conditions"])
+# hist(all_growth_total$total_na[all_growth_total$scenario != "norm_conditions"])
+minna(all_growth_total$total_na)
+maxna(all_growth_total$total_na)
+
+all_growth_total %>%
+  ggplot(aes(x = longitude, y = latitude, fill = total_na)) +
+  geom_tile() +
+  geom_sf(data = ozmap_data(data = "states"), inherit.aes = F) +
+  coord_sf(xlim = c(111.5, 155), ylim = c(-44.5, -8.5), expand = F) +
+  scale_x_continuous(breaks = seq(100, 160, 10)) +
+  scale_y_continuous(breaks = seq(-2.5, -45, -5)) +
+  scale_fill_viridis_c(
+    limits = c(1, 10000),
+    labels = scales::label_number(),
+    trans = "log10",
+    na.value = "grey",
+    guide = guide_colorbar(
+      title = expression("Total N removed (mg m"^-2 * ")"),
+      barheight = 1,
+      barwidth = 20,
+      title.position = "top",
+      title.hjust = 0.5
+    )
+  ) +
+  labs(x = "Longitude", y = "Latitude") +
+  facet_grid(rows = vars(species), cols = vars(scenario)) +
+  prettyplot() +
+  theme(legend.position = "top", strip.text = element_blank(), strip.background = element_blank())
+```
+
+## Supplemented removed OF supplementation
+
+Overall, the supplemented growth had an extra 10uM of nitrogen per day, or an extra 3650 uM per year. How much of that was actually removed by supplemented growth?
+
+```{r total-removed-OF-supplementation}
+#| eval: false
+
+supplementation <- set_units(3650, "umol L-1")
+supplementation <- supplementation %>% set_units("mg m-3") 
+supplementation <- (supplementation * set_units(5.5, "m")) %>% drop_units()
+
+rem_diff_ofsupp <- rem_diff_total %>% 
+  select(-norm_rem, -rem_diff) %>% 
+  group_by(species, state, cell_no, longitude, latitude) %>% 
+  reframe(supp_rem = sumna(supp_rem)) %>% 
+  mutate(
+    supp_rem = supp_rem/supplementation,
+    # supp_rem = case_when(supp_rem <= 0 ~ NA, T ~ supp_rem)
+  )
+
+rem_diff_ofsupp %>% 
+  group_by(species) %>% 
+  reframe(
+    supp_rem_mean = 100*meanna(supp_rem),
+    supp_rem_max = 100*maxna(supp_rem)
+  )
+```
+
+# Monthly supplemented growth results
+
+```{r supp-total-means}
+#| code-summary: |
+#|   Get mean nitrogen removed per each state/month
+
+supp_growth_month_arma <- supp_growth_end %>% 
+  filter(success & species == "A. armata") %>% 
+  group_by(species, state, month) %>% 
+  reframe(
+    mean = meanna(value) %>% set_units("mg m-2"),
+    sd = sdna(value) %>% set_units("mg m-2")
+  ) 
+  
+supp_growth_month_arma %>% 
+  select(-sd) %>% 
+  pivot_wider(names_from = state, values_from = mean) %>% 
+  arrange(month)
+
+supp_growth_month_taxi <- supp_growth_end %>% 
+  filter(success & species != "A. armata") %>% 
+  group_by(species, state, month) %>% 
+  reframe(
+    mean = meanna(value) %>% set_units("mg m-2"),
+    sd = sdna(value) %>% set_units("mg m-2")
+  )
+  
+supp_growth_month_taxi %>% 
+  select(-sd) %>% 
+  pivot_wider(names_from = state, values_from = mean) %>% 
+  arrange(month)
+```
+
+```{r fig-supp-growth-end}
+#| eval: false
+
+plot_data <- rbind(supp_growth_month_arma, supp_growth_month_taxi) %>% 
+  mutate(
+    mean = drop_units(mean),
+    sd = drop_units(sd),
+    mean = case_when(is.na(mean) ~ 0, T ~ mean),
+    sd = case_when(sd > mean ~ mean, is.na(sd) ~ 0, T ~ sd),
+    state = factor(state, levels = states_ord, labels = states_lng),
+    month = as.integer(month)
+  ) 
+  
+plot_data %>%
+  ggplot(aes(
+      x = month, y = mean, ymin = mean - sd, ymax = mean + sd,
+      color = state, fill = state, linetype = species
+  )) +
+  geom_line(linewidth = 0.75) +
+  geom_ribbon(alpha = 0.25, linewidth = 0.25) +
+  facet_wrap(facets = vars(state), ncol = 2) +
+  # scale_y_continuous(breaks = seq(0, 150, 25), limits = c(0, 175), expand = c(0,0)) +
+  scale_color_manual(values = states_pal) +
+  scale_fill_manual(values = states_pal) +
+  env_plot() +
+  labs(x = "Day of the year", y = expression("Total N removed (mg m"^-2 *")"))
+```
+
