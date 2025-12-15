@@ -1,17 +1,18 @@
 project:
   type: default
-  output-dir: rendered-html-docs
+  output-dir: docs-rendered
   render: 
-    - documentation/methods_environmental_conditions.qmd
-    - documentation/methods_parameterisation.qmd
-    - documentation/results_ambient_growth.qmd
-    - documentation/results_ambient_growth_lims.qmd
-    - documentation/results_supplemented_growth.qmd
+    - docs-working/methods_environmental_conditions.qmd
+    - docs-working/methods_parameterisation.qmd
+    - docs-working/results_ambient_growth.qmd
+    - docs-working/results_ambient_growth_lims.qmd
+    - docs-working/results_supplemented_growth.qmd
+    - docs-working/all_for_manuscript.qmd
 
 format:
   html:
     theme: simplex
-    css: ["extra.css"]
+    css: ["docs-working/extra.css"]
     embed-resources: true
     code-fold: true
     code-overflow: wrap
@@ -30,10 +31,10 @@ execute:
   eval: true
   cache: true # quarto render .\documentation\ --cache-refresh
 
-bibliography: ["refs.bib", "manual-refs.bib"]
+bibliography: ["docs-working/refs.bib", "docs-working/manual-refs.bib"]
 
 knitr: 
   opts_chunk:
     fig.align: center
     fig.height: 8
-    fig.width: 7
+    fig.width: 6.5
