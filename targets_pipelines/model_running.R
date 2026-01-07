@@ -90,7 +90,7 @@ list(
   tar_target(species_names, c("armata", "taxiformis")),
 
   # Cell data -----------------------------------------------------------------------------------------------------
-  tar_target(BARRA_R2_cell_coords_file, "data"/"processed_env_inputs/BARRA_R2_cell_coords.parquet", format = "file"),
+  tar_target(BARRA_R2_cell_coords_file, "data/processed_env_inputs/BARRA_R2_cell_coords.parquet", format = "file"),
   tar_target(BARRA_R2_cell_coords, arrow::read_parquet(BARRA_R2_cell_coords_file)),
   tar_target(states, unique(BARRA_R2_cell_coords$state)),
   tar_target(BARRA_R2_cell_nos_file, "data/processed_env_inputs/BARRA_R2_cell_nos.qs", format = "file"),

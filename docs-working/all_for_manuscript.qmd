@@ -342,7 +342,7 @@ plot_grid(
 )
 ```
 
-# Figure 5: N removal
+# Figure 5: N removal in ambient conditions
 
 ```{r normal-growth-end-data}
 #| code-summary: Get cell growth in ambient (normal) conditions
@@ -366,7 +366,7 @@ norm_growth_end <- norm_growth_end %>%
 #| warning: false
 #| fig-width: 6
 #| fig-height: 7.75
-#| fig-cap: Nitrogen removal per month at harvest by Asparagopsis armata (solid lines) and Asparagopsis taxiformis (dashed lines) in the 12 monthly growth periods in each state. Bold lines show mean values while shaded areas show mean ± standard deviation.
+#| fig-cap: Nitrogen removal per month at harvest by Asparagopsis armata (solid lines) and Asparagopsis taxiformis (dashed lines) in the 12 monthly growth periods in each state in typical environmental conditions. Bold lines show mean values while shaded areas show mean ± standard deviation.
 
 norm_growth_end %>%
   mutate(value = case_when(value <= 0 ~ 0, T ~ value)) %>% 
@@ -395,7 +395,7 @@ norm_growth_end %>%
   labs(x = "Day of the year", y = expression("Total N removed (mg m"^-2 *")"))
 ```
 
-# Figure 6: Ambient vs supplemented growth
+# Figure 7: Ambient vs supplemented growth
 
 ```{r normal-growth-total-data}
 #| code-summary: Get total cell growth in ambient (normal) conditions
@@ -477,6 +477,59 @@ all_growth_total %>%
   facet_grid(rows = vars(species), cols = vars(scenario)) +
   prettyplot_MS() +
   theme(legend.position = "top", strip.text = element_blank(), strip.background = element_blank())
+```
+
+# Figure 7: N removal in supplemented conditions
+
+```{r supplemented-growth-end-data}
+#| code-summary: Get cell growth in supplemented conditions
+
+supp_growth_end <- file.path(runs_data, "cell_growth_supp_end.parquet") %>% 
+  read_parquet(mmap = T) %>% 
+  merge(cell_coords, by = "cell_no")
+
+# Total N removed at each harvest
+supp_growth_end <- supp_growth_end %>% 
+  mutate(
+    value = TN_end - TN_start,
+    value = case_when(value == 0 ~ NA, T ~ value),
+    month = as.factor(month(parse_date_time(start, orders = "j"))),
+    species = factor(species, levels = c("armata", "taxiformis"), labels = c("A. armata", "A. taxiformis"))
+  )
+```
+
+```{r fig-7}
+#| code-summary: Code to generate plot
+#| warning: false
+#| fig-width: 6
+#| fig-height: 7.75
+#| fig-cap: Nitrogen removal per month at harvest by Asparagopsis armata (solid lines) and Asparagopsis taxiformis (dashed lines) in the 12 monthly growth periods in each state. Bold lines show mean values while shaded areas show mean ± standard deviation.
+
+supp_growth_end %>%
+  mutate(value = case_when(value <= 0 ~ 0, T ~ value)) %>% 
+  group_by(species, state, start) %>%
+  reframe(
+    mean = meanna(value),
+    sd = sdna(value)
+  ) %>%
+  mutate(
+    sd = case_when(sd > mean ~ mean, T ~ sd),
+    state = factor(state, levels = states_ord, labels = states_lng)
+  ) %>%
+  ggplot(
+    aes(
+      x = start, y = mean, ymin = mean - sd, ymax = mean + sd,
+      color = state, fill = state, linetype = species
+    )
+  ) +
+  geom_line(linewidth = 0.75) +
+  geom_ribbon(alpha = 0.25, linewidth = 0.25) +
+  facet_wrap(facets = vars(state), ncol = 2) +
+  # scale_y_continuous(breaks = seq(0, 150, 25), limits = c(0, 175), expand = c(0,0)) +
+  scale_color_manual(values = states_pal) +
+  scale_fill_manual(values = states_pal) +
+  env_plot_MS() +
+  labs(x = "Day of the year", y = expression("Total N removed (mg m"^-2 *")"))
 ```
 
 # Supplementary figures

@@ -32,6 +32,8 @@ source("R_scripts/00_functions.R")
 Sys.setenv(TAR_PROJECT = "project_inputs")
 out_path <- here("data/processed_env_inputs")
 
+tar_load_globals()
+
 tar_load(states_bbox) 
 states_bbox %>% 
   qsave(file.path(out_path, "states_bbox.qs"))
@@ -50,7 +52,7 @@ tar_load(BARRA_R2_cell_nos_chunked)
 # # Cell input timeseries processing ------------------------------------------------------------------------------
 hz_list <- list()
 for (i in seq_along(BARRA_R2_cell_nos_chunked)) {
-  tar_load(cell_input_chunked_gapfilled, branches = i) 
+  tar_load(cell_input_chunked_gapfilled, branches = i)
 
   hz_list[[i]] <- cell_input_chunked_gapfilled %>% 
     distinct(cell_no, hz)
@@ -58,6 +60,14 @@ for (i in seq_along(BARRA_R2_cell_nos_chunked)) {
   cell_input_chunked_gapfilled %>%
     dplyr::select(-hz) %>% 
     write_parquet(file.path(out_path, "cell_input_all", paste0("cell_input_all_", fixnum(i), ".parquet")))
+
+  cell_input_chunked_gapfilled %>%
+    dplyr::select(-hz) %>% 
+    mutate(
+      Ni_input = Ni_input + Ni_add,
+      Am_input = Am_input + Am_add
+    ) %>% 
+    write_parquet(file.path(out_path, "cell_input_supp", paste0("cell_input_supp_", fixnum(i), ".parquet")))
 }
 hz_list %>% 
   bind_rows() %>% 

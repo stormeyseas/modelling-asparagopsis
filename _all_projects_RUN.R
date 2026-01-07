@@ -80,11 +80,14 @@ tar_make(
   callr_function = NULL
 )
 tar_prune()
+
+# For processing environmental inputs you need "Ni_add" and "Am_add" from the project_running pipeline.
+tar_load_globals(script = "targets_pipelines/model_running.R")
+
 source("R_scripts/09_processing_env_inputs.R")
 
 # Model running ---------------------------------------------------------------------------------------------------
 Sys.setenv(TAR_PROJECT = "project_running")
-
 tar_outdated()
 
 # Quicker test
