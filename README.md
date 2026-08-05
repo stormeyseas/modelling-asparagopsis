@@ -1,4 +1,4 @@
-# Modelling _Asparagopsis_ growth in Australian coastal waters
+# Modelling _Asparagopsis_ nitrogen bioremediation efficiency in Australian coastal environments
 
 This repository contains all the functions and code that generated the data used in the publication: Reimer, T., Cresswell, K. A., Fraser, K. M., White, C. A., & Hadley, S. A. (2026). Modelling Asparagopsis nitrogen bioremediation efficiency in Australian coastal environments. Ecological Modelling, 518, 111623. [https://doi.org/10.1016/j.ecolmodel.2026.111623](https://doi.org/10.1016/j.ecolmodel.2026.111623)
 
