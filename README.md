@@ -1,6 +1,7 @@
 # Modelling _Asparagopsis_ growth in Australian coastal waters
 
-This repository contains all the functions and code that generated the data used in the publication (link to go here).
+This repository contains all the functions and code that generated the data used in the publication: Reimer, T., Cresswell, K. A., Fraser, K. M., White, C. A., & Hadley, S. A. (2026). Modelling Asparagopsis nitrogen bioremediation efficiency in Australian coastal environments. Ecological Modelling, 518, 111623. [https://doi.org/10.1016/j.ecolmodel.2026.111623](https://doi.org/10.1016/j.ecolmodel.2026.111623)
+
 
 - The main workflow can be found in `_all_projects_RUN.R`. This runs the scripts in `R-scripts` in the correct order. Note that many of these scripts reference data that is not stored on Github, but is publicly available. For information on what data was used and how to access it, please contact me (stormeyseas).
 - The scripts used to parameterise both _Asparagopsis_ species can be found in the `parameterisation` folder.
