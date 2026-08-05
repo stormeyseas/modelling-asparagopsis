@@ -1,5 +1,6 @@
 ---
 title: "All figures for manuscript"
+subtitle: "Modelling <i>Asparagopsis</i> nitrogen bioremediation efficiency in Australian coastal environments"
 author: Tormey Reimer
 date: last-modified
 ---

@@ -1,13 +1,42 @@
 project:
-  type: default
-  output-dir: docs-rendered
+  title: "Modelling <i>Asparagopsis</i> nitrogen bioremediation efficiency in Australian coastal environments"
+  type: website
+  output-dir: docs
   render: 
+    - index.qmd
     - docs-working/methods_environmental_conditions.qmd
     - docs-working/methods_parameterisation.qmd
+    - parameterisation/asparagopsis-parameterisation.qmd
     - docs-working/results_ambient_growth.qmd
     - docs-working/results_ambient_growth_lims.qmd
     - docs-working/results_supplemented_growth.qmd
     - docs-working/all_for_manuscript.qmd
+
+website:
+  sidebar:
+    style: "docked"
+    search: false
+    contents:
+      - text: "Home"
+        href: index.qmd
+      - section: "Model parameterisation"
+        contents: 
+          - text: "Methods for parameterisation"
+            href: docs-working/methods_parameterisation.qmd
+          - text: "Aparagopsis parameters"
+            href: parameterisation/asparagopsis-parameterisation.qmd
+      - section: "Main analysis"
+        contents: 
+          - text: "Environmental conditions"
+            href: docs-working/methods_environmental_conditions.qmd
+          - text: "Run ambient growth"
+            href: docs-working/results_ambient_growth.qmd
+          - text: "Get growth limitors"
+            href: docs-working/results_ambient_growth_lims.qmd
+          - text: "Run supplemented growth"
+            href: docs-working/results_supplemented_growth.qmd
+          - text: "Figures for manuscript"
+            href: docs-working/all_for_manuscript.qmd
 
 format:
   html:
@@ -18,18 +47,19 @@ format:
     code-overflow: wrap
     toc: true
     toc-expand: true
-    toc-location: left
+    toc-location: right
     toc-depth: 4
+    lightbox: true
     lang: en-GB
     grid:
-      sidebar-width: 300px
+      sidebar-width: 350px
       body-width: 1250px
-      margin-width: 200px
+      margin-width: 250px
       gutter-width: 2em
         
 execute:
   eval: true
-  cache: true # quarto render .\documentation\ --cache-refresh
+  cache: true
 
 bibliography: ["docs-working/refs.bib", "docs-working/manual-refs.bib"]
 

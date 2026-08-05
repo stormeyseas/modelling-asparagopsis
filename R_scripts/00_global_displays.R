@@ -2,12 +2,15 @@ library(here)
 library(tidyverse)
 library(qs2)
 
-spec_store <- here() %>% file.path("targets_outputs", "_species")
-envi_store <- here() %>% file.path("targets_outputs", "_env_inputs")
-runs_store <- here() %>% file.path("targets_outputs", "_model_running")
-spec_data <- here() %>% file.path("data", "processed_species")
-envi_data <- here() %>% file.path("data", "processed_env_inputs")
-runs_data <- here() %>% file.path("data", "processed_model_running")
+# This path is for my (Tormey's) personal longterm data storage
+permdata_path <- file.path("D:", "modelling-asparagopsis")
+
+spec_store <- file.path(permdata_path, "targets_outputs", "_species")
+envi_store <- file.path(permdata_path, "targets_outputs", "_env_inputs")
+runs_store <- file.path(permdata_path, "targets_outputs", "_model_running")
+spec_data  <- file.path(permdata_path, "data", "processed_species")
+envi_data  <- file.path(permdata_path, "data", "processed_env_inputs")
+runs_data  <- file.path(permdata_path, "data", "processed_model_running")
 
 bounds <- file.path(envi_data, "states_bbox.qs") %>% qs::qread()
 

@@ -1,0 +1,20 @@
+---
+title: "Index of project documentation files"
+subtitle: "Modelling <i>Asparagopsis</i> nitrogen bioremediation efficiency in Australian coastal environments"
+author: "Tormey Reimer"
+date: today
+---
+
+All code and processes used in the project are linked below. Note that some scripts require access to raw data which is not stored on Github. For information on how to access specific data please email the corresponding author.
+
+The results of this project have been published in: Reimer, T., Cresswell, K. A., Fraser, K. M., White, C. A., & Hadley, S. A. (2026). Modelling *Asparagopsis* nitrogen bioremediation efficiency in Australian coastal environments. Ecological Modelling, 518, 111623. [https://doi.org/10.1016/j.ecolmodel.2026.111623](https://doi.org/10.1016/j.ecolmodel.2026.111623).
+
+| Page | Description |
+|---------|:-------------------------------------------------|
+| **[Model parameterisation](docs-working/methods_parameterisation.qmd)** | Generates all model parameters for the two *Asparagopsis* species. |
+| **[Parameterisation details](parameterisation/asparagopsis-parameterisation.qmd)** | Further detail for the *Asparagopsis* vlaues. |
+| **[Environmental conditions](docs-working/methods_environmental_conditions.qmd)** | Prepares the raw input data for environmental conditions. |
+| **[Run ambient growth](docs-working/results_ambient_growth.qmd)** | Runs the model for ambient environmental conditions. |
+| **[Get growth limitors](docs-working/results_ambient_growth_lims.qmd)** | Gets growth-limiting information from the simulation results. |
+| **[Run supplemented growth](docs-working/results_supplemented_growth.qmd)** | Runs the model for supplemented environmental conditions. |
+| **[Figures for manuscript](docs-working/all_for_manuscript.qmd)** | Generates the figures for the final manuscript. |

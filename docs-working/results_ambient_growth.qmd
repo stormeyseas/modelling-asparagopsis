@@ -1,5 +1,6 @@
 ---
 title: "Results: Ambient growth and bioremediation"
+subtitle: "Modelling <i>Asparagopsis</i> nitrogen bioremediation efficiency in Australian coastal environments"
 author: Tormey Reimer
 date: last-modified
 ---
