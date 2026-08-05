@@ -1,6 +1,7 @@
 project:
   title: "Modelling <i>Asparagopsis</i> nitrogen bioremediation efficiency in Australian coastal environments"
   type: website
+  output-dir: docs
   render: 
     - index.qmd
     - docs-working/methods_environmental_conditions.qmd
