@@ -9,3 +9,10 @@ details > summary {
   font-style: italic;
 }
 
+.figure > .figcaption {
+  text-align: center;
+}
+
+.quarto-figure-center {
+  text-align: center;
+}
